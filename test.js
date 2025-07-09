@@ -1,303 +1,119 @@
 "use strict";
-// ==UserScript==
-// @name         多引擎搜索监听器(防浪费版)
-// @namespace    http://tampermonkey.net/
-// @version      1.2
-// @description  监听搜索内容并防止页面刷新导致的token浪费
-// @author       You
-// @match        *://*.bing.com/*
-// @match        *://*.google.com/*
-// @match        *://*.baidu.com/*
-// @grant        none
-// @run-at       document-idle
-// ==/UserScript==
-var SEObserver;
-(function (SEObserver) {
-    // 防抖机制
-    let lock = false;
-    // 搜索引擎配置
-    const ENGINE_CONFIGS = [
-        {
-            name: "Bing",
-            searchPagePattern: /^\/search$/i,
-            searchParam: "q",
-            searchFormSelector: "#sb_form",
-            isSPA: true,
-        },
-        {
-            name: "Google",
-            searchPagePattern: /^\/search$/i,
-            searchParam: "q",
-            searchFormSelector: "form[action='/search']",
-            isSPA: true,
-        },
-        {
-            name: "Baidu",
-            searchPagePattern: /^\/s$/i,
-            searchParam: "wd",
-            searchFormSelector: "#form",
-            isSPA: false,
-        },
-    ];
-    // 主控制器
-    class SearchObserver {
-        handlers;
-        currentEngine = null;
-        lastQuery = "";
-        urlObserver = null;
-        apiState = {
-            pending: false,
-            query: "",
-            requestId: 0,
-        };
-        visibilityHandler = null;
-        constructor(handlers = []) {
-            this.handlers = handlers;
-            console.log("construct");
-            this.init();
+/**
+ * 判断目标字符串是否匹配通配符模式
+ * @param pattern 通配符模式（可能包含星号）
+ * @param target 目标字符串
+ * @returns 是否匹配
+ */
+function wildcardMatch(pattern, target) {
+    // 如果模式不包含星号，则直接比较字符串
+    if (pattern.indexOf('*') === -1) {
+        return pattern === target;
+    }
+    // 将模式按星号拆分成多个部分
+    const parts = pattern.split('*');
+    // 如果模式以星号开头，则第一个部分为空字符串；同样，以星号结尾时最后一个部分为空
+    const isStartWithStar = pattern.startsWith('*');
+    const isEndWithStar = pattern.endsWith('*');
+    let currentIndex = 0;
+    for (let i = 0; i < parts.length; i++) {
+        const part = parts[i];
+        // 空部分（连续星号或开头/结尾星号）直接跳过
+        if (part === '')
+            continue;
+        // 查找当前部分在目标字符串中的位置
+        const index = target.indexOf(part, currentIndex);
+        if (index === -1)
+            return false;
+        // 对于第一个部分（非空），如果不是以星号开头，则必须从目标字符串开头匹配
+        if (i === 0 && !isStartWithStar && index !== 0) {
+            return false;
         }
-        dispatch(event) {
-            for (const handler of this.handlers) {
-                handler(event);
-            }
-        }
-        // 初始化
-        init() {
-            this.detectEngine();
-            if (!this.currentEngine)
-                return;
-            // 初始搜索词捕获
-            const initialQuery = this.getSearchQueryFromURL();
-            if (initialQuery) {
-                this.safeLogSearchQuery(initialQuery);
-            }
-            // 设置监听器
-            this.setupFormObserver();
-            // 设置页面可见性监听
-            this.setupVisibilityHandler();
-            if (this.currentEngine.isSPA) {
-                this.setupUrlObserver();
-            }
-        }
-        // 设置页面可见性处理器
-        setupVisibilityHandler() {
-            this.visibilityHandler = () => {
-                if (document.visibilityState === "hidden" && this.apiState.pending) {
-                    console.warn(`页面隐藏，取消查询: ${this.apiState.query}`);
-                    this.cancelAPIRequest();
-                }
-            };
-            document.addEventListener("visibilitychange", this.visibilityHandler);
-        }
-        // 检测当前搜索引擎
-        detectEngine() {
-            const hostname = window.location.hostname;
-            const pathname = window.location.pathname;
-            for (const config of ENGINE_CONFIGS) {
-                if (hostname.includes(config.name.toLowerCase())) {
-                    this.currentEngine = config;
-                    break;
-                }
-            }
-            if (!this.currentEngine) {
-                for (const config of ENGINE_CONFIGS) {
-                    if (config.searchPagePattern.test(pathname)) {
-                        this.currentEngine = config;
-                        break;
-                    }
-                }
-            }
-        }
-        // 设置表单监听
-        setupFormObserver() {
-            if (!this.currentEngine)
-                return;
-            const form = document.querySelector(this.currentEngine.searchFormSelector);
-            if (form) {
-                form.addEventListener("submit", this.handleFormSubmit.bind(this));
-            }
-            else {
-                setTimeout(() => this.setupFormObserver(), 500);
-            }
-        }
-        // 设置URL变化监听 (SPA引擎)
-        setupUrlObserver() {
-            this.urlObserver = new MutationObserver(() => {
-                const query = this.getSearchQueryFromURL();
-                if (query && query !== this.lastQuery) {
-                    this.safeLogSearchQuery(query);
-                }
-            });
-            this.urlObserver.observe(document.documentElement, {
-                childList: true,
-                subtree: true,
-            });
-        }
-        // 处理表单提交
-        handleFormSubmit(event) {
-            event.preventDefault();
-            if (!this.currentEngine)
-                return;
-            const query = this.getSearchQueryFromForm();
-            if (!query || query === this.lastQuery)
-                return;
-            // 对于传统搜索引擎，延迟处理
-            if (!this.currentEngine.isSPA) {
-                this.delayedLogSearchQuery(query);
-            }
-            else {
-                this.safeLogSearchQuery(query);
-            }
-            // 允许表单继续提交
-            setTimeout(() => {
-                const form = event.target;
-                if (form)
-                    form.submit();
-            }, 0);
-        }
-        // 安全记录搜索词（带取消机制）
-        safeLogSearchQuery(query) {
-            // 取消之前的请求
-            this.cancelAPIRequest();
-            const requestId = Date.now();
-            this.apiState = {
-                pending: true,
-                query,
-                requestId,
-            };
-            // 对于传统搜索引擎，延迟API调用
-            if (!this.currentEngine?.isSPA) {
-                setTimeout(() => this.executeAPIRequest(query, requestId), 500);
-            }
-            else {
-                this.executeAPIRequest(query, requestId);
-            }
-        }
-        // 延迟记录搜索词
-        delayedLogSearchQuery(query) {
-            this.cancelAPIRequest();
-            const requestId = Date.now();
-            this.apiState = {
-                pending: true,
-                query,
-                requestId,
-            };
-            // 设置延迟执行
-            setTimeout(() => {
-                // 检查请求是否仍然有效
-                if (this.apiState.requestId === requestId && this.apiState.pending) {
-                    this.executeAPIRequest(query, requestId);
-                }
-            }, 500);
-        }
-        // 执行API请求
-        executeAPIRequest(query, requestId) {
-            if (lock)
-                return;
-            lock = true;
-            setTimeout(() => (lock = false), 1000);
-            // 检查请求是否被取消
-            if (!this.apiState.pending || this.apiState.requestId !== requestId) {
-                return;
-            }
-            // 更新状态
-            this.lastQuery = query;
-            this.apiState.pending = false;
-            const engineName = this.currentEngine?.name || "Unknown";
-            // 实际调用AI API
-            this.dispatch({ engineName: engineName, query: query });
-            console.log(`[${engineName}] 搜索内容: ${query}`);
-        }
-        // 取消API请求
-        cancelAPIRequest() {
-            if (this.apiState.pending) {
-                console.warn(`取消查询: ${this.apiState.query}`);
-                this.apiState.pending = false;
-                // 这里可以添加实际的API取消逻辑
-            }
-        }
-        // 从表单获取搜索词
-        getSearchQueryFromForm() {
-            if (!this.currentEngine)
-                return null;
-            if (this.currentEngine.name === "Google") {
-                const input = document.querySelector("textarea[name='q']");
-                return input?.value.trim() || null;
-            }
-            if (this.currentEngine.name === "Baidu") {
-                const input = document.getElementById("kw");
-                return input?.value.trim() || null;
-            }
-            if (this.currentEngine.name === "Bing") {
-                const input = document.getElementById("sb_form_q");
-                return input?.value.trim() || null;
-            }
-            return null;
-        }
-        // 从URL获取搜索词
-        getSearchQueryFromURL() {
-            if (!this.currentEngine)
-                return "";
-            const urlParams = new URLSearchParams(window.location.search);
-            const query = urlParams.get(this.currentEngine.searchParam) || "";
-            return this.normalizeQuery(query);
-        }
-        // 标准化查询词
-        normalizeQuery(query) {
-            return decodeURIComponent(query).trim().replace(/\s+/g, " ");
-        }
-        // 清理资源
-        cleanup() {
-            if (this.visibilityHandler) {
-                document.removeEventListener("visibilitychange", this.visibilityHandler);
-            }
-            if (this.urlObserver) {
-                this.urlObserver.disconnect();
-            }
-            this.cancelAPIRequest();
+        // 更新当前查找位置
+        currentIndex = index + part.length;
+    }
+    // 检查最后一个部分是否匹配到目标字符串的末尾（如果不是以星号结尾）
+    if (!isEndWithStar) {
+        const lastPart = parts[parts.length - 1];
+        if (lastPart !== '' && !target.endsWith(lastPart)) {
+            return false;
         }
     }
-    let observerInstance = null;
-    function getInstance() {
-        if (observerInstance === null) {
-            throw Error("Uninitialized SearchObserver");
-        }
-        return observerInstance;
+    return true;
+}
+/**
+ * 判断 URL 是否符合带通配符的约束模式
+ * @param url 要检查的 URL 字符串
+ * @param pattern 通配符模式，格式为 (a)://(b)/(c)
+ * @returns 是否匹配
+ */
+function isPatternMatch(url, pattern) {
+    // 解析 pattern：分割协议部分
+    const [protocolPattern, rest] = pattern.split('://');
+    if (!rest)
+        return isPatternMatch(url, `*://${protocolPattern}/*`);
+    // 查找第一个斜杠，用于分割域名和路径
+    const slashIndex = rest.indexOf('/');
+    if (slashIndex === -1)
+        return false;
+    // 提取域名部分和路径部分
+    const hostPattern = rest.substring(0, slashIndex);
+    const pathPattern = rest.substring(slashIndex); // 包含开头的斜杠
+    // 解析 URL
+    let urlObj;
+    try {
+        urlObj = new URL(url);
     }
-    SEObserver.getInstance = getInstance;
-    // 启动监听
-    function start(handlers = []) {
-        const init = () => {
-            if (observerInstance) {
-                observerInstance.cleanup();
-            }
-            observerInstance = new SearchObserver(handlers);
-        };
-        if (document.readyState === "loading") {
-            document.addEventListener("DOMContentLoaded", init);
-        }
-        else {
-            init();
-        }
-        // 添加beforeunload事件确保清理
-        window.addEventListener("beforeunload", () => {
-            if (observerInstance) {
-                observerInstance.cleanup();
-            }
-        });
+    catch (e) {
+        return false; // 无效的 URL
     }
-    SEObserver.start = start;
-})(SEObserver || (SEObserver = {}));
-(function () {
-    "use strict";
-    if (window.self !== window.top) {
-        console.log("Skipping iframe:", window.location.href);
-        return;
+    // 处理协议：移除实际协议中的冒号后缀
+    const actualProtocol = urlObj.protocol.replace(/:$/, '');
+    // 获取主机名、端口和路径名
+    const actualHostname = urlObj.hostname;
+    const actualPort = urlObj.port;
+    const actualPathname = urlObj.pathname;
+    // 1. 匹配协议部分
+    if (!wildcardMatch(protocolPattern, actualProtocol)) {
+        return false;
     }
-    // 启动脚本
-    SEObserver.start([
-        (e) => {
-            console.log("handle", e);
-        },
-    ]);
-})();
+    // 2. 处理域名部分（分离主机名和端口）
+    let hostnamePattern;
+    let portPattern = null;
+    const colonIndex = hostPattern.indexOf(':');
+    if (colonIndex !== -1) {
+        hostnamePattern = hostPattern.substring(0, colonIndex);
+        portPattern = hostPattern.substring(colonIndex + 1);
+    }
+    else {
+        hostnamePattern = hostPattern;
+    }
+    // 3. 匹配端口部分
+    if (portPattern !== null) {
+        // 模式指定了端口，必须显式匹配
+        if (!wildcardMatch(portPattern, actualPort)) {
+            return false;
+        }
+    }
+    else {
+        // 模式未指定端口，则实际端口必须为空（不考虑默认端口）
+        if (actualPort !== '') {
+            return false;
+        }
+    }
+    // 4. 匹配主机名部分（反转域名层级进行后缀匹配）
+    const patternHostArray = hostnamePattern.split('.').reverse();
+    const actualHostArray = actualHostname.split('.').reverse();
+    // 实际域名层级不能少于模式
+    if (actualHostArray.length < patternHostArray.length) {
+        return false;
+    }
+    for (let i = 0; i < patternHostArray.length; i++) {
+        if (!wildcardMatch(patternHostArray[i], actualHostArray[i])) {
+            return false;
+        }
+    }
+    // 5. 匹配路径部分
+    return wildcardMatch(pathPattern, actualPathname);
+}
+console.log(isPatternMatch("https://example.com/affbfbcdeeecdiii", "https://example.com/a*b*c*d")); // true

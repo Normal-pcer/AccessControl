@@ -13,197 +13,364 @@
 // @connect      api.deepseek.com
 // @require      https://cdn.jsdelivr.net/npm/vue@3.2.47/dist/vue.global.prod.js
 // ==/UserScript==
-const DEBUG_MODE = false;
+const DEBUG_MODE = true;
 const STYLE = `
-    #content-guard-container {
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        width: 380px;
-        background: white;
-        border: 1px solid #e0e0e0;
-        border-radius: 10px;
-        box-shadow: 0 5px 20px rgba(0,0,0,0.1);
-        z-index: 99999;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        padding: 20px;
-        transition: all 0.3s ease;
-        max-height: 90vh;
-        overflow-y: auto;
-    }
-    
-    #content-guard-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 15px;
-        padding-bottom: 15px;
-        border-bottom: 1px solid #eee;
-    }
-    
-    #content-guard-title {
-        font-size: 18px;
-        font-weight: 600;
-        color: #333;
-    }
-    
-    #content-guard-close {
-        cursor: pointer;
-        font-size: 22px;
-        color: #999;
-        transition: color 0.2s;
-    }
-    
-    #content-guard-close:hover {
-        color: #333;
-    }
-    
-    .config-section {
-        margin-bottom: 20px;
-    }
-    
-    .section-title {
-        font-size: 15px;
-        font-weight: 500;
-        margin-bottom: 10px;
-        color: #444;
-    }
-    
-    .form-group {
-        margin-bottom: 15px;
-    }
-    
-    .form-label {
-        display: block;
-        margin-bottom: 5px;
-        font-size: 13px;
-        color: #666;
-    }
-    
-    .form-input {
-        width: 100%;
-        padding: 10px 12px;
-        border: 1px solid #ddd;
-        border-radius: 6px;
-        font-size: 14px;
-        box-sizing: border-box;
-        transition: border 0.2s;
-    }
-    
-    .form-input:focus {
-        border-color: #4d90fe;
-        outline: none;
-        box-shadow: 0 0 0 2px rgba(77, 144, 254, 0.2);
-    }
-    
-    .form-input[type="password"] {
-        letter-spacing: 1px;
-    }
-    
-    .form-help {
-        font-size: 12px;
-        color: #888;
-        margin-top: 5px;
-    }
-    
-    .btn {
-        padding: 10px 16px;
-        border-radius: 6px;
-        font-size: 14px;
-        font-weight: 500;
-        cursor: pointer;
-        transition: all 0.2s;
-        border: none;
-    }
-    
-    .btn-primary {
-        background-color: #4d90fe;
-        color: white;
-    }
-    
-    .btn-primary:hover {
-        background-color: #3d7de0;
-    }
-    
-    .btn-secondary {
-        background-color: #f0f0f0;
-        color: #333;
-    }
-    
-    .btn-secondary:hover {
-        background-color: #e0e0e0;
-    }
-    
-    .btn-group {
-        display: flex;
-        gap: 10px;
-        margin-top: 15px;
-    }
-    
-    .status-message {
-        padding: 10px;
-        border-radius: 6px;
-        margin-top: 15px;
-        font-size: 13px;
-    }
-    
-    .status-success {
-        background-color: #e8f5e9;
-        color: #2e7d32;
-        border: 1px solid #c8e6c9;
-    }
-    
-    .status-error {
-        background-color: #ffebee;
-        color: #c62828;
-        border: 1px solid #ffcdd2;
-    }
-    
-    .budget-info {
-        padding: 12px;
-        background: #f9f9f9;
-        border-radius: 6px;
-        border: 1px solid #eee;
-        font-size: 13px;
-    }
-    
-    .budget-meter {
-        height: 6px;
-        background: #e0e0e0;
-        border-radius: 3px;
-        margin: 8px 0;
-        overflow: hidden;
-    }
-    
-    .budget-progress {
-        height: 100%;
-        background: #4d90fe;
-        border-radius: 3px;
-        transition: width 0.5s ease;
-    }
-    
-    .config-tabs {
-        display: flex;
-        margin-bottom: 15px;
-        border-bottom: 1px solid #eee;
-    }
-    
-    .tab-item {
-        padding: 8px 15px;
-        cursor: pointer;
-        font-size: 14px;
-        color: #666;
-        border-bottom: 2px solid transparent;
-    }
-    
-    .tab-item.active {
-        color: #4d90fe;
-        border-bottom-color: #4d90fe;
-        font-weight: 500;
-    }
+#content-guard-container {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 420px;
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 10px;
+    box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+    z-index: 99999;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    padding: 20px;
+    transition: all 0.3s ease;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+#content-guard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #eee;
+}
+
+#content-guard-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: #333;
+}
+
+#content-guard-close {
+    cursor: pointer;
+    font-size: 22px;
+    color: #999;
+    transition: color 0.2s;
+}
+
+#content-guard-close:hover {
+    color: #333;
+}
+
+.config-section {
+    margin-bottom: 20px;
+}
+
+.section-title {
+    font-size: 15px;
+    font-weight: 500;
+    margin-bottom: 10px;
+    color: #444;
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
+
+.form-label {
+    display: block;
+    margin-bottom: 5px;
+    font-size: 13px;
+    color: #666;
+}
+
+.form-input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 14px;
+    box-sizing: border-box;
+    transition: border 0.2s;
+}
+
+.form-input:focus {
+    border-color: #4d90fe;
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(77, 144, 254, 0.2);
+}
+
+.form-input[type="password"] {
+    letter-spacing: 1px;
+}
+
+.form-help {
+    font-size: 12px;
+    color: #888;
+    margin-top: 5px;
+}
+
+.btn {
+    padding: 10px 16px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+}
+
+.btn-primary {
+    background-color: #4d90fe;
+    color: white;
+}
+
+.btn-primary:hover {
+    background-color: #3d7de0;
+}
+
+.btn-secondary {
+    background-color: #f0f0f0;
+    color: #333;
+}
+
+.btn-secondary:hover {
+    background-color: #e0e0e0;
+}
+
+.btn-group {
+    display: flex;
+    gap: 10px;
+    margin-top: 15px;
+}
+
+.status-message {
+    padding: 10px;
+    border-radius: 6px;
+    margin-top: 15px;
+    font-size: 13px;
+}
+
+.status-success {
+    background-color: #e8f5e9;
+    color: #2e7d32;
+    border: 1px solid #c8e6c9;
+}
+
+.status-error {
+    background-color: #ffebee;
+    color: #c62828;
+    border: 1px solid #ffcdd2;
+}
+
+.budget-info {
+    padding: 12px;
+    background: #f9f9f9;
+    border-radius: 6px;
+    border: 1px solid #eee;
+    font-size: 13px;
+}
+
+.budget-meter {
+    height: 6px;
+    background: #e0e0e0;
+    border-radius: 3px;
+    margin: 8px 0;
+    overflow: hidden;
+}
+
+.budget-progress {
+    height: 100%;
+    background: #4d90fe;
+    border-radius: 3px;
+    transition: width 0.5s ease;
+}
+
+.config-tabs {
+    display: flex;
+    margin-bottom: 15px;
+    border-bottom: 1px solid #eee;
+}
+
+.tab-item {
+    padding: 8px 15px;
+    cursor: pointer;
+    font-size: 14px;
+    color: #666;
+    border-bottom: 2px solid transparent;
+}
+
+.tab-item.active {
+    color: #4d90fe;
+    border-bottom-color: #4d90fe;
+    font-weight: 500;
+}
+
+.whitelist-item {
+    display: flex;
+    margin-bottom: 8px;
+    align-items: center;
+}
+
+.whitelist-item input {
+    flex: 1;
+    margin-right: 8px;
+}
+
+.btn-delete {
+    background: #ff4d4f;
+    color: white;
+    border: none;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    cursor: pointer;
+}
 `;
 var ContentGuard;
 (function (ContentGuard) {
+    /**
+     * 实用工具
+     */
+    let Utils;
+    (function (Utils) {
+        /**
+         * 判断目标字符串是否匹配通配符模式（支持单词内通配）
+         * @param pattern 通配符模式（可能包含星号）
+         * @param target 目标字符串
+         * @returns 是否匹配
+         */
+        function wildcardMatch(pattern, target) {
+            if (pattern === "*")
+                return true;
+            if (pattern.indexOf("*") === -1)
+                return pattern === target;
+            const parts = pattern.split("*");
+            const isStartWithStar = pattern.startsWith("*");
+            const isEndWithStar = pattern.endsWith("*");
+            let currentIndex = 0;
+            for (let i = 0; i < parts.length; i++) {
+                const part = parts[i];
+                if (part === "")
+                    continue;
+                const index = target.indexOf(part, currentIndex);
+                if (index === -1)
+                    return false;
+                if (i === 0 && !isStartWithStar && index !== 0)
+                    return false;
+                currentIndex = index + part.length;
+            }
+            if (!isEndWithStar) {
+                const lastPart = parts[parts.length - 1];
+                if (lastPart !== "" && !target.endsWith(lastPart))
+                    return false;
+            }
+            return true;
+        }
+        /**
+         * 匹配域名部分（支持单词通配和星号单词匹配）
+         * @param actualParts 实际域名分割数组
+         * @param patternParts 模式域名分割数组
+         * @returns 是否匹配
+         */
+        function matchHost(actualParts, patternParts) {
+            // 反转数组，从顶级域开始匹配
+            const actual = actualParts.slice().reverse();
+            const pattern = patternParts.slice().reverse();
+            let i = 0, j = 0;
+            let starJ = -1, starI = -1;
+            while (i < actual.length) {
+                // 如果模式还有且当前模式是星号
+                if (j < pattern.length && pattern[j] === "*") {
+                    starJ = j;
+                    starI = i;
+                    j++;
+                    continue;
+                }
+                // 正常匹配：模式存在且当前部分匹配
+                if (j < pattern.length && wildcardMatch(pattern[j], actual[i])) {
+                    i++;
+                    j++;
+                }
+                // 如果之前遇到过星号，则回溯：让星号多匹配一个实际部分
+                else if (starJ !== -1) {
+                    j = starJ + 1;
+                    i = starI + 1;
+                    starI = i;
+                }
+                else {
+                    return false;
+                }
+            }
+            // 处理模式中剩余的部分（必须都是星号）
+            while (j < pattern.length) {
+                if (pattern[j] !== "*")
+                    return false;
+                j++;
+            }
+            return true;
+        }
+        /**
+         * 判断URL是否符合带通配符的约束模式
+         * @param url 要检查的URL字符串
+         * @param pattern 通配符模式，格式为 (a)://(b)/(c)
+         * @returns 是否匹配
+         */
+        function isPatternMatch(url, pattern) {
+            // 解析模式：分割协议部分
+            const [protocolPattern, rest] = pattern.split("://");
+            if (!rest) {
+                // 域名模式
+                return isPatternMatch(url, "*://" + "*." + pattern + "/*");
+            }
+            // 分割域名和路径
+            const slashIndex = rest.indexOf("/");
+            if (slashIndex === -1)
+                return false;
+            const hostPattern = rest.substring(0, slashIndex);
+            const pathPattern = rest.substring(slashIndex);
+            // 解析URL
+            let urlObj;
+            try {
+                urlObj = new URL(url);
+            }
+            catch (e) {
+                return false;
+            }
+            // 处理协议
+            const actualProtocol = urlObj.protocol.replace(/:$/, "");
+            if (!wildcardMatch(protocolPattern, actualProtocol)) {
+                return false;
+            }
+            // 处理端口
+            let hostnamePattern;
+            let portPattern = null;
+            const colonIndex = hostPattern.indexOf(":");
+            if (colonIndex !== -1) {
+                hostnamePattern = hostPattern.substring(0, colonIndex);
+                portPattern = hostPattern.substring(colonIndex + 1);
+            }
+            else {
+                hostnamePattern = hostPattern;
+            }
+            // 匹配端口
+            const actualPort = urlObj.port;
+            if (portPattern !== null) {
+                if (!wildcardMatch(portPattern, actualPort))
+                    return false;
+            }
+            else if (actualPort !== "") {
+                return false;
+            }
+            // 匹配域名
+            const actualHostname = urlObj.hostname;
+            const patternHostParts = hostnamePattern.split(".");
+            const actualHostParts = actualHostname.split(".");
+            if (!matchHost(actualHostParts, patternHostParts)) {
+                return false;
+            }
+            // 匹配路径
+            const actualPathname = urlObj.pathname;
+            return wildcardMatch(pathPattern, actualPathname);
+        }
+        Utils.isPatternMatch = isPatternMatch;
+    })(Utils = ContentGuard.Utils || (ContentGuard.Utils = {}));
     /**
      * 配置文件相关
      * @author DeepSeek R1
@@ -218,8 +385,10 @@ var ContentGuard;
         const DEFAULT_CONFIG = {
             apiKey: "",
             baseUrl: "https://api.deepseek.com/v1",
+            modelName: "deepseek-chat",
             budgetLimit: 2000.0,
-            strictMode: true,
+            saveMode: true,
+            whitelist: [],
         };
         // 获取配置
         async function getConfig() {
@@ -275,6 +444,50 @@ var ContentGuard;
             }
         }
         Config.updateBudget = updateBudget;
+        function isWhitelisted(url, patterns) {
+            return patterns.some((pattern) => Utils.isPatternMatch(url, pattern));
+        }
+        Config.isWhitelisted = isWhitelisted;
+        /**
+         * 将完整域名转换为带通配符的域名格式，特别处理双顶级域名（如 .com.cn, .edu.us）
+         * @param url 输入的URL或域名
+         * @returns 带通配符的域名格式
+         */
+        function convertToWildcardDomain(url) {
+            // 移除协议部分（如果存在）
+            let domain = url.replace(/^(https?:\/\/)?(www\.)?/, "");
+            // 移除路径和查询参数
+            domain = domain.split("/")[0];
+            // 分割域名部分
+            const parts = domain.split(".");
+            // 定义常见的单顶级域名
+            // prettier-ignore
+            const commonSingleSuffixes = new Set([
+                "com", "net", "org", "gov", "edu", "cn",
+                "hk", "tw", "uk", "us", "au", "jp", "de",
+                "fr", "it", "ru", "br", "in", "ca", "mx"
+            ]);
+            // 检查是否是双顶级域名情况
+            if (parts.length >= 2) {
+                const secondLastPart = parts[parts.length - 2];
+                // 如果倒数第二部分是常见单顶级域名，则认为是双顶级域名情况
+                if (commonSingleSuffixes.has(secondLastPart)) {
+                    if (parts.length === 2) {
+                        return `*.${domain}`;
+                    }
+                    else {
+                        return `*.${parts.slice(-3).join(".")}`;
+                    }
+                }
+            }
+            // 普通情况，返回 *.上级域名
+            if (parts.length <= 2) {
+                return `*.${domain}`;
+            }
+            else {
+                return `*.${parts.slice(-2).join(".")}`;
+            }
+        }
         // 创建配置界面
         function createConfigUI() {
             const CONTAINER_ID = "content-guard-container";
@@ -296,6 +509,7 @@ var ContentGuard;
                 <div class="tab-item active" data-tab="api">API 设置</div>
                 <div class="tab-item" data-tab="budget">预算管理</div>
                 <div class="tab-item" data-tab="behavior">行为设置</div>
+                <div class="tab-item" data-tab="whitelist">白名单管理</div>
             </div>
             <div id="config-content"></div>
         `;
@@ -331,28 +545,34 @@ var ContentGuard;
                 switch (tabName) {
                     case "api":
                         configContent.innerHTML = `
-                        <div class="config-section">
-                            <div class="section-title">API 设置</div>
-                            
-                            <div class="form-group">
-                                <label class="form-label">DeepSeek API 密钥</label>
-                                <input type="password" id="config-api-key" class="form-input" value="${config.apiKey}" placeholder="输入您的 API 密钥">
-                                <div class="form-help">在 DeepSeek 平台创建 API 密钥</div>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label class="form-label">API 基础 URL</label>
-                                <input type="text" id="config-base-url" class="form-input" value="${config.baseUrl}">
-                                <div class="form-help">通常不需要修改</div>
-                            </div>
-                        </div>
-                        
-                        <div class="btn-group">
-                            <button id="save-config" class="btn btn-primary">保存设置</button>
-                            <button id="test-api" class="btn btn-secondary">测试连接</button>
-                        </div>
-                        
-                        <div id="api-status"></div>
+<div class="config-section">
+    <div class="section-title">API 设置</div>
+    
+    <div class="form-group">
+        <label class="form-label">API 密钥</label>
+        <input type="password" id="config-api-key" class="form-input" value="${config.apiKey}" placeholder="输入您的 API 密钥">
+        <div class="form-help">在 AI 提供商创建 API 密钥</div>
+    </div>
+    
+    <div class="form-group">
+        <label class="form-label">API 基础 URL</label>
+        <input type="text" id="config-base-url" class="form-input" value="${config.baseUrl}">
+        <div class="form-help">参考 AI 文档</div>
+    </div>
+
+    <div class="form-group">
+        <label class="form-label">模型名称</label>
+        <input type="text" id="config-model-name" class="form-input" value="${config.modelName}">
+        <div class="form-help">参考 AI 文档</div>
+    </div>
+</div>
+
+<div class="btn-group">
+    <button id="save-config" class="btn btn-primary">保存设置</button>
+    <button id="test-api" class="btn btn-secondary">测试连接</button>
+</div>
+
+<div id="api-status"></div>
                     `;
                         break;
                     case "budget":
@@ -361,49 +581,80 @@ var ContentGuard;
                             ? currentLimit.toString()
                             : currentLimit.toFixed(3);
                         configContent.innerHTML = `
-                        <div class="config-section">
-                            <div class="section-title">预算管理</div>
-                            
-                            <div class="budget-info">
-                                <div>本月已用 token: ${(budgetData.tokensUsed / 1000).toFixed(2)} K</div>
-                                <div>预算上限 token: ${(config.budgetLimit / 1000).toFixed(2)} K</div>
-                                <div class="budget-meter">
-                                    <div class="budget-progress" style="width: ${budgetPercentage}%"></div>
-                                </div>
-                                <div>Token 使用: ${budgetData.tokensUsed.toLocaleString()}</div>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label class="form-label">每月预算限制 (千 token)</label>
-                                <input type="number" id="config-budget" class="form-input" value="${formated}" min="0.5" step="0.1">
-                                <div class="form-help">设置最大月预算，防止意外费用</div>
-                            </div>
-                        </div>
-                        
-                        <div class="btn-group">
-                            <button id="save-budget" class="btn btn-primary">保存预算设置</button>
-                            <button id="reset-budget" class="btn btn-secondary">重置本月使用</button>
-                        </div>
+<div class="config-section">
+    <div class="section-title">预算管理</div>
+    
+    <div class="budget-info">
+        <div>本月已用 token: ${(budgetData.tokensUsed / 1000).toFixed(2)} K</div>
+        <div>预算上限 token: ${(config.budgetLimit / 1000).toFixed(2)} K</div>
+        <div class="budget-meter">
+            <div class="budget-progress" style="width: ${budgetPercentage}%"></div>
+        </div>
+        <div>Token 使用: ${budgetData.tokensUsed.toLocaleString()}</div>
+    </div>
+    
+    <div class="form-group">
+        <label class="form-label">每月预算限制 (千 token)</label>
+        <input type="number" id="config-budget" class="form-input" value="${formated}" min="0.5" step="0.1">
+        <div class="form-help">设置最大月预算，防止意外费用</div>
+    </div>
+</div>
+
+<div class="btn-group">
+    <button id="save-budget" class="btn btn-primary">保存预算设置</button>
+    <button id="reset-budget" class="btn btn-secondary">重置本月使用</button>
+</div>
                     `;
                         break;
                     case "behavior":
                         configContent.innerHTML = `
-                        <div class="config-section">
-                            <div class="section-title">行为设置</div>
-                            
-                            <div class="form-group">
-                                <label class="form-label">
-                                    <input type="checkbox" id="config-strict-mode" ${config.strictMode ? "checked" : ""}>
-                                    启用严格模式
-                                </label>
-                                <div class="form-help">严格模式会进行更全面的内容分析</div>
-                            </div>
-                        </div>
-                        
-                        <div class="btn-group">
-                            <button id="save-behavior" class="btn btn-primary">保存设置</button>
-                        </div>
-                    `;
+<div class="config-section">
+    <div class="section-title">行为设置</div>
+    
+    <div class="form-group">
+        <label class="form-label">
+            <input type="checkbox" id="config-strict-mode" ${config.saveMode ? "checked" : ""}>
+            启用省token模式
+        </label>
+        <div class="form-help">牺牲识别准度，节约 token</div>
+    </div>
+</div>
+
+<div class="btn-group">
+    <button id="save-behavior" class="btn btn-primary">保存设置</button>
+</div>
+`;
+                        break;
+                    case "whitelist":
+                        configContent.innerHTML = `
+<div class="config-section">
+    <div class="section-title">网站白名单</div>
+    <div class="form-help">在此列表中的网站将不会被审查</div>
+    
+    <div id="whitelist-container">
+        ${config.whitelist
+                            .map((url) => `
+            <div class="whitelist-item">
+                <input type="text" value="${url}" class="form-input">
+                <button class="btn-delete">×</button>
+            </div>
+        `)
+                            .join("")}
+    </div>
+    
+    <button id="add-whitelist" class="btn">+ 添加网站</button>
+    
+    <div class="form-help">
+        格式提示：<br>
+        • 完整域名：google.com<br>
+        • 子域名：*.twitter.com<br>
+        • 路径：youtube.com/education
+    </div>
+</div>
+
+<div class="btn-group">
+    <button id="save-whitelist" class="btn btn-primary">保存白名单</button>
+</div>`;
                         break;
                 }
                 // 绑定保存事件
@@ -414,6 +665,34 @@ var ContentGuard;
                 document
                     .getElementById("save-behavior")
                     ?.addEventListener("click", saveBehaviorConfig);
+                const container = document.getElementById("whitelist-container");
+                // 添加白名单项
+                document.getElementById("add-whitelist")?.addEventListener("click", () => {
+                    const initValue = convertToWildcardDomain(window.location.href);
+                    const newItem = document.createElement("div");
+                    newItem.className = "whitelist-item";
+                    newItem.innerHTML = `
+        <input type="text" value="${initValue}" class="form-input" placeholder="输入网址">
+        <button class="btn-delete">×</button>
+    `;
+                    container?.appendChild(newItem);
+                });
+                // 删除白名单项
+                container?.addEventListener("click", (e) => {
+                    if (e.target.classList.contains("btn-delete")) {
+                        e.target.parentElement?.remove();
+                    }
+                });
+                // 保存白名单
+                document.getElementById("save-whitelist")?.addEventListener("click", async () => {
+                    const inputs = Array.from(document.querySelectorAll("#whitelist-container .whitelist-item input"));
+                    const config = await getConfig();
+                    config.whitelist = inputs
+                        .map((input) => input.value.trim())
+                        .filter((url) => url.length > 0);
+                    await saveConfig(config);
+                    showStatus("白名单已保存!", true);
+                });
             }
             // API 配置保存
             async function saveApiConfig() {
@@ -447,7 +726,7 @@ var ContentGuard;
                 if (!strictModeInput)
                     return;
                 const config = await getConfig();
-                config.strictMode = strictModeInput.checked;
+                config.saveMode = strictModeInput.checked;
                 await saveConfig(config);
                 showStatus("行为设置已保存!", true);
             }
@@ -846,7 +1125,7 @@ var ContentGuard;
                     left: "0",
                     width: "100vw",
                     height: "100vh",
-                    backgroundColor: "rgba(0, 0, 0, 0.95)", // 95% 不透明度
+                    backgroundColor: "rgba(0, 0, 0, 1)", // 完全不透明
                     display: "flex",
                     justifyContent: "center",
                     alignItems: "center",
@@ -1539,7 +1818,7 @@ var ContentGuard;
          */
         async function getPageRating(content) {
             if (DEBUG_MODE)
-                return Rating.L5_EXPLICIT;
+                return Rating.L2_SENSITIVE;
             // 构建完整提示词
             const fullPrompt = AI_JUDGE_PROMPT + "文本信息：" + content;
             const value = await AITools.callAPI(fullPrompt);
@@ -1582,6 +1861,16 @@ var ContentGuard;
          * 检查当前网页内容，并执行相关策略
          */
         async function checkPage() {
+            const config = await Config.getConfig();
+            const currentUrl = window.location.href;
+            if (Config.isWhitelisted(currentUrl, config.whitelist)) {
+                console.log("[ContentGuard] 白名单网站，跳过审查");
+                return;
+            }
+            if (DEBUG_MODE && window.location.href.includes("no-content-guard")) {
+                console.log("[ContentGuard] 测试模式，跳过审查");
+                return;
+            }
             // 获取 Rating 之后的处理步骤
             const blockByRating = (rating) => {
                 if (rating === null) {
