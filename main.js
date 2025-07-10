@@ -1,7 +1,7 @@
 "use strict";
 // ==UserScript==
 // @name         ContentGuard - AI Content Filter
-// @namespace    https://your-namespace.com
+// @namespace    https://github.com/normal-pcer/AccessControl
 // @version      1.0
 // @license      MIT
 // @description  基于人工智能的敏感内容过滤系统
@@ -11,7 +11,7 @@
 // @grant        GM.setValue
 // @grant        GM_xmlhttpRequest
 // @grant        GM_addStyle
-// @connect      *
+// @connect      api.deepseek.com
 // @require      https://cdn.jsdelivr.net/npm/vue@3.2.47/dist/vue.global.prod.js
 // @run-at document-start
 // ==/UserScript==
@@ -61,29 +61,29 @@ const STYLE = `
     color: #333;
 }
 
-.config-section {
+.content-guard-config-section {
     margin-bottom: 20px;
 }
 
-.section-title {
+.content-guard-section-title {
     font-size: 15px;
     font-weight: 500;
     margin-bottom: 10px;
     color: #444;
 }
 
-.form-group {
+.content-guard-form-group {
     margin-bottom: 15px;
 }
 
-.form-label {
+.content-guard-form-label {
     display: block;
     margin-bottom: 5px;
     font-size: 13px;
     color: #666;
 }
 
-.form-input {
+.content-guard-form-input {
     width: 100%;
     padding: 10px 12px;
     border: 1px solid #ddd;
@@ -93,23 +93,23 @@ const STYLE = `
     transition: border 0.2s;
 }
 
-.form-input:focus {
+.content-guard-form-input:focus {
     border-color: #4d90fe;
     outline: none;
     box-shadow: 0 0 0 2px rgba(77, 144, 254, 0.2);
 }
 
-.form-input[type="password"] {
+.content-guard-form-input[type="password"] {
     letter-spacing: 1px;
 }
 
-.form-help {
+.content-guard-form-help {
     font-size: 12px;
     color: #888;
     margin-top: 5px;
 }
 
-.btn {
+.content-guard-btn {
     padding: 10px 16px;
     border-radius: 6px;
     font-size: 14px;
@@ -119,50 +119,50 @@ const STYLE = `
     border: none;
 }
 
-.btn-primary {
+.content-guard-btn-primary {
     background-color: #4d90fe;
     color: white;
 }
 
-.btn-primary:hover {
+.content-guard-btn-primary:hover {
     background-color: #3d7de0;
 }
 
-.btn-secondary {
+.content-guard-btn-secondary {
     background-color: #f0f0f0;
     color: #333;
 }
 
-.btn-secondary:hover {
+.content-guard-btn-secondary:hover {
     background-color: #e0e0e0;
 }
 
-.btn-group {
+.content-guard-btn-group {
     display: flex;
     gap: 10px;
     margin-top: 15px;
 }
 
-.status-message {
+.content-guard-status-message {
     padding: 10px;
     border-radius: 6px;
     margin-top: 15px;
     font-size: 13px;
 }
 
-.status-success {
+.content-guard-status-success {
     background-color: #e8f5e9;
     color: #2e7d32;
     border: 1px solid #c8e6c9;
 }
 
-.status-error {
+.content-guard-status-error {
     background-color: #ffebee;
     color: #c62828;
     border: 1px solid #ffcdd2;
 }
 
-.budget-info {
+.content-guard-budget-info {
     padding: 12px;
     background: #f9f9f9;
     border-radius: 6px;
@@ -170,7 +170,7 @@ const STYLE = `
     font-size: 13px;
 }
 
-.budget-meter {
+.content-guard-budget-meter {
     height: 6px;
     background: #e0e0e0;
     border-radius: 3px;
@@ -178,20 +178,20 @@ const STYLE = `
     overflow: hidden;
 }
 
-.budget-progress {
+.content-guard-budget-progress {
     height: 100%;
     background: #4d90fe;
     border-radius: 3px;
     transition: width 0.5s ease;
 }
 
-.config-tabs {
+.content-guard-config-tabs {
     display: flex;
     margin-bottom: 15px;
     border-bottom: 1px solid #eee;
 }
 
-.tab-item {
+.content-guard-tab-item {
     padding: 8px 15px;
     cursor: pointer;
     font-size: 14px;
@@ -199,24 +199,24 @@ const STYLE = `
     border-bottom: 2px solid transparent;
 }
 
-.tab-item.active {
+.content-guard-tab-item.active {
     color: #4d90fe;
     border-bottom-color: #4d90fe;
     font-weight: 500;
 }
 
-.whitelist-item {
+.content-guard-whitelist-item {
     display: flex;
     margin-bottom: 8px;
     align-items: center;
 }
 
-.whitelist-item input {
+.content-guard-whitelist-item input {
     flex: 1;
     margin-right: 8px;
 }
 
-.btn-delete {
+.content-guard-btn-delete {
     background: #ff4d4f;
     color: white;
     border: none;
@@ -645,23 +645,23 @@ var ContentGuard;
             container = document.createElement("div");
             container.id = CONTAINER_ID;
             container.innerHTML = `
-            <div id="content-guard-header">
-                <div id="content-guard-title">ContentGuard 配置</div>
-                <div id="content-guard-close">×</div>
-            </div>
-            <div class="config-tabs">
-                <div class="tab-item active" data-tab="api">API 设置</div>
-                <div class="tab-item" data-tab="budget">预算管理</div>
-                <div class="tab-item" data-tab="behavior">行为设置</div>
-                <div class="tab-item" data-tab="whitelist">白名单管理</div>
-            </div>
-            <div id="config-content"></div>
-        `;
+        <div id="content-guard-header">
+            <div id="content-guard-title">ContentGuard 配置</div>
+            <div id="content-guard-close">×</div>
+        </div>
+        <div class="content-guard-config-tabs">
+            <div class="content-guard-tab-item active" data-tab="api">API 设置</div>
+            <div class="content-guard-tab-item" data-tab="budget">预算管理</div>
+            <div class="content-guard-tab-item" data-tab="behavior">行为设置</div>
+            <div class="content-guard-tab-item" data-tab="whitelist">白名单管理</div>
+        </div>
+        <div id="content-guard-config-content"></div>
+    `;
             document.body.appendChild(container);
             // 获取DOM元素
             const closeButton = document.getElementById("content-guard-close");
-            const configContent = document.getElementById("config-content");
-            const tabItems = container.querySelectorAll(".tab-item");
+            const configContent = document.getElementById("content-guard-config-content");
+            const tabItems = container.querySelectorAll(".content-guard-tab-item");
             // 关闭按钮事件
             closeButton?.addEventListener("click", () => {
                 container.style.display = "none";
@@ -689,34 +689,34 @@ var ContentGuard;
                 switch (tabName) {
                     case "api":
                         configContent.innerHTML = `
-<div class="config-section">
-    <div class="section-title">API 设置</div>
+<div class="content-guard-config-section">
+    <div class="content-guard-section-title">API 设置</div>
     
-    <div class="form-group">
-        <label class="form-label">API 密钥</label>
-        <input type="password" id="config-api-key" class="form-input" value="${config.apiKey}" placeholder="输入您的 API 密钥">
-        <div class="form-help">在 AI 提供商创建 API 密钥</div>
+    <div class="content-guard-form-group">
+        <label class="content-guard-form-label">API 密钥</label>
+        <input type="password" id="content-guard-config-api-key" class="content-guard-form-input" value="${config.apiKey}" placeholder="输入您的 API 密钥">
+        <div class="content-guard-form-help">在 AI 提供商创建 API 密钥</div>
     </div>
     
-    <div class="form-group">
-        <label class="form-label">API 基础 URL</label>
-        <input type="text" id="config-base-url" class="form-input" value="${config.baseUrl}">
-        <div class="form-help">参考 AI 文档</div>
+    <div class="content-guard-form-group">
+        <label class="content-guard-form-label">API 基础 URL</label>
+        <input type="text" id="content-guard-config-base-url" class="content-guard-form-input" value="${config.baseUrl}">
+        <div class="content-guard-form-help">参考 AI 文档</div>
     </div>
 
-    <div class="form-group">
-        <label class="form-label">模型名称</label>
-        <input type="text" id="config-model-name" class="form-input" value="${config.modelName}">
-        <div class="form-help">参考 AI 文档</div>
+    <div class="content-guard-form-group">
+        <label class="content-guard-form-label">模型名称</label>
+        <input type="text" id="content-guard-config-model-name" class="content-guard-form-input" value="${config.modelName}">
+        <div class="content-guard-form-help">参考 AI 文档</div>
     </div>
 </div>
 
-<div class="btn-group">
-    <button id="save-config" class="btn btn-primary">保存设置</button>
-    <button id="test-api" class="btn btn-secondary">测试连接</button>
+<div class="content-guard-btn-group">
+    <button id="content-guard-save-config" class="content-guard-btn content-guard-btn-primary">保存设置</button>
+    <button id="content-guard-test-api" class="content-guard-btn content-guard-btn-secondary">测试连接</button>
 </div>
 
-<div id="api-status"></div>
+<div id="content-guard-api-status"></div>
                     `;
                         break;
                     case "budget":
@@ -725,70 +725,70 @@ var ContentGuard;
                             ? currentLimit.toString()
                             : currentLimit.toFixed(3);
                         configContent.innerHTML = `
-<div class="config-section">
-    <div class="section-title">预算管理</div>
+<div class="content-guard-config-section">
+    <div class="content-guard-section-title">预算管理</div>
     
-    <div class="budget-info">
+    <div class="content-guard-budget-info">
         <div>本月已用 token: ${(budgetData.tokensUsed / 1000).toFixed(2)} K</div>
         <div>预算上限 token: ${(config.budgetLimit / 1000).toFixed(2)} K</div>
-        <div class="budget-meter">
-            <div class="budget-progress" style="width: ${budgetPercentage}%"></div>
+        <div class="content-guard-budget-meter">
+            <div class="content-guard-budget-progress" style="width: ${budgetPercentage}%"></div>
         </div>
         <div>Token 使用: ${budgetData.tokensUsed.toLocaleString()}</div>
     </div>
     
-    <div class="form-group">
-        <label class="form-label">每月预算限制 (千 token)</label>
-        <input type="number" id="config-budget" class="form-input" value="${formated}" min="0.5" step="0.1">
-        <div class="form-help">设置最大月预算，防止意外费用</div>
+    <div class="content-guard-form-group">
+        <label class="content-guard-form-label">每月预算限制 (千 token)</label>
+        <input type="number" id="content-guard-config-budget" class="content-guard-form-input" value="${formated}" min="0.5" step="0.1">
+        <div class="content-guard-form-help">设置最大月预算，防止意外费用</div>
     </div>
 </div>
 
-<div class="btn-group">
-    <button id="save-budget" class="btn btn-primary">保存预算设置</button>
-    <button id="reset-budget" class="btn btn-secondary">重置本月使用</button>
+<div class="content-guard-btn-group">
+    <button id="content-guard-save-budget" class="content-guard-btn content-guard-btn-primary">保存预算设置</button>
+    <button id="content-guard-reset-budget" class="content-guard-btn content-guard-btn-secondary">重置本月使用</button>
 </div>
                     `;
                         break;
                     case "behavior":
                         configContent.innerHTML = `
-<div class="config-section">
-    <div class="section-title">行为设置</div>
+<div class="content-guard-config-section">
+    <div class="content-guard-section-title">行为设置</div>
     
-    <div class="form-group">
-        <label class="form-label">
-            <input type="checkbox" id="config-strict-mode" ${config.saveMode ? "checked" : ""}>
+    <div class="content-guard-form-group">
+        <label class="content-guard-form-label">
+            <input type="checkbox" id="content-guard-config-strict-mode" ${config.saveMode ? "checked" : ""}>
             启用省token模式
         </label>
-        <div class="form-help">牺牲识别准度，节约 token</div>
+        <div class="content-guard-form-help">牺牲识别准度，节约 token</div>
     </div>
 </div>
 
-<div class="btn-group">
-    <button id="save-behavior" class="btn btn-primary">保存设置</button>
+<div class="content-guard-btn-group">
+    <button id="content-guard-save-behavior" class="content-guard-btn content-guard-btn-primary">保存设置</button>
 </div>
 `;
                         break;
                     case "whitelist":
                         configContent.innerHTML = `
-<div class="config-section">
-    <div class="section-title">网站白名单</div>
-    <div class="form-help">在此列表中的网站将不会被审查</div>
+<div class="content-guard-config-section">
+    <div class="content-guard-section-title">网站白名单</div>
+    <div class="content-guard-form-help">在此列表中的网站将不会被审查</div>
     
-    <div id="whitelist-container">
+    <div id="content-guard-whitelist-container">
         ${config.whitelist
                             .map((url) => `
-            <div class="whitelist-item">
-                <input type="text" value="${url}" class="form-input">
-                <button class="btn-delete">×</button>
+            <div class="content-guard-whitelist-item">
+                <input type="text" value="${url}" class="content-guard-form-input">
+                <button class="content-guard-btn-delete">×</button>
             </div>
         `)
                             .join("")}
     </div>
     
-    <button id="add-whitelist" class="btn">+ 添加网站</button>
+    <button id="content-guard-add-whitelist" class="content-guard-btn">+ 添加网站</button>
     
-    <div class="form-help">
+    <div class="content-guard-form-help">
         格式提示：<br>
         • 完整域名：google.com<br>
         • 子域名：*.twitter.com<br>
@@ -796,40 +796,52 @@ var ContentGuard;
     </div>
 </div>
 
-<div class="btn-group">
-    <button id="save-whitelist" class="btn btn-primary">保存白名单</button>
+<div class="content-guard-btn-group">
+    <button id="content-guard-save-whitelist" class="content-guard-btn content-guard-btn-primary">保存白名单</button>
 </div>`;
                         break;
                 }
                 // 绑定保存事件
-                document.getElementById("save-config")?.addEventListener("click", saveApiConfig);
-                document.getElementById("test-api")?.addEventListener("click", testApiConnection);
-                document.getElementById("save-budget")?.addEventListener("click", saveBudgetConfig);
-                document.getElementById("reset-budget")?.addEventListener("click", resetBudget);
                 document
-                    .getElementById("save-behavior")
+                    .getElementById("content-guard-save-config")
+                    ?.addEventListener("click", saveApiConfig);
+                document
+                    .getElementById("content-guard-test-api")
+                    ?.addEventListener("click", testApiConnection);
+                document
+                    .getElementById("content-guard-save-budget")
+                    ?.addEventListener("click", saveBudgetConfig);
+                document
+                    .getElementById("content-guard-reset-budget")
+                    ?.addEventListener("click", resetBudget);
+                document
+                    .getElementById("content-guard-save-behavior")
                     ?.addEventListener("click", saveBehaviorConfig);
-                const container = document.getElementById("whitelist-container");
+                const container = document.getElementById("content-guard-whitelist-container");
                 // 添加白名单项
-                document.getElementById("add-whitelist")?.addEventListener("click", () => {
+                document
+                    .getElementById("content-guard-add-whitelist")
+                    ?.addEventListener("click", () => {
                     const initValue = convertToWildcardDomain(window.location.href);
                     const newItem = document.createElement("div");
-                    newItem.className = "whitelist-item";
+                    newItem.className = "content-guard-whitelist-item";
                     newItem.innerHTML = `
-        <input type="text" value="${initValue}" class="form-input" placeholder="输入网址">
-        <button class="btn-delete">×</button>
-    `;
+                <input type="text" value="${initValue}" class="content-guard-form-input" placeholder="输入网址">
+                <button class="content-guard-btn-delete">×</button>
+            `;
                     container?.appendChild(newItem);
                 });
                 // 删除白名单项
                 container?.addEventListener("click", (e) => {
-                    if (e.target.classList.contains("btn-delete")) {
+                    if (e.target.classList.contains("content-guard-btn-delete")) {
                         e.target.parentElement?.remove();
                     }
                 });
                 // 保存白名单
-                document.getElementById("save-whitelist")?.addEventListener("click", async () => {
-                    const inputs = Array.from(document.querySelectorAll("#whitelist-container .whitelist-item input"));
+                document
+                    .getElementById("content-guard-save-whitelist")
+                    ?.addEventListener("click", async () => {
+                    const inputs = Array.from(document.querySelectorAll("#content-guard-whitelist-container .content-guard-whitelist-item input"));
                     const config = await getConfig();
                     config.whitelist = inputs
                         .map((input) => input.value.trim())
@@ -837,100 +849,100 @@ var ContentGuard;
                     await saveConfig(config);
                     showStatus("白名单已保存!", true);
                 });
-            }
-            // API 配置保存
-            async function saveApiConfig() {
-                const apiKeyInput = document.getElementById("config-api-key");
-                const baseUrlInput = document.getElementById("config-base-url");
-                if (!apiKeyInput || !baseUrlInput)
-                    return;
-                const config = await getConfig();
-                config.apiKey = apiKeyInput.value.trim();
-                config.baseUrl = baseUrlInput.value.trim();
-                await saveConfig(config);
-                showStatus("配置已保存!", true);
-            }
-            // 预算配置保存
-            async function saveBudgetConfig() {
-                const budgetInput = document.getElementById("config-budget");
-                if (!budgetInput)
-                    return;
-                const newBudget = parseFloat(budgetInput.value);
-                if (isNaN(newBudget))
-                    return;
-                const config = await getConfig();
-                config.budgetLimit = newBudget * 1000; // KB -> chars
-                await saveConfig(config);
-                showStatus("预算设置已更新!", true);
-                renderTabContent("budget"); // 刷新显示
-            }
-            // 行为配置保存
-            async function saveBehaviorConfig() {
-                const strictModeInput = document.getElementById("config-strict-mode");
-                if (!strictModeInput)
-                    return;
-                const config = await getConfig();
-                config.saveMode = strictModeInput.checked;
-                await saveConfig(config);
-                showStatus("行为设置已保存!", true);
-            }
-            // 重置预算
-            async function resetBudget() {
-                try {
-                    const now = new Date();
-                    const monthKey = `${now.getFullYear()}-${now.getMonth() + 1}`;
-                    const budget = await GM.getValue(BUDGET_KEY, {});
-                    if (budget[monthKey]) {
-                        budget[monthKey] = { tokensUsed: 0 };
-                        await GM.setValue(BUDGET_KEY, budget);
-                        showStatus("本月预算数据已重置!", true);
-                        renderTabContent("budget"); // 刷新显示
+                // API 配置保存
+                async function saveApiConfig() {
+                    const apiKeyInput = document.getElementById("content-guard-config-api-key");
+                    const baseUrlInput = document.getElementById("content-guard-config-base-url");
+                    if (!apiKeyInput || !baseUrlInput)
+                        return;
+                    const config = await getConfig();
+                    config.apiKey = apiKeyInput.value.trim();
+                    config.baseUrl = baseUrlInput.value.trim();
+                    await saveConfig(config);
+                    showStatus("配置已保存!", true);
+                }
+                // 预算配置保存
+                async function saveBudgetConfig() {
+                    const budgetInput = document.getElementById("content-guard-config-budget");
+                    if (!budgetInput)
+                        return;
+                    const newBudget = parseFloat(budgetInput.value);
+                    if (isNaN(newBudget))
+                        return;
+                    const config = await getConfig();
+                    config.budgetLimit = newBudget * 1000; // KB -> chars
+                    await saveConfig(config);
+                    showStatus("预算设置已更新!", true);
+                    renderTabContent("budget"); // 刷新显示
+                }
+                // 行为配置保存
+                async function saveBehaviorConfig() {
+                    const strictModeInput = document.getElementById("content-guard-config-strict-mode");
+                    if (!strictModeInput)
+                        return;
+                    const config = await getConfig();
+                    config.saveMode = strictModeInput.checked;
+                    await saveConfig(config);
+                    showStatus("行为设置已保存!", true);
+                }
+                // 重置预算
+                async function resetBudget() {
+                    try {
+                        const now = new Date();
+                        const monthKey = `${now.getFullYear()}-${now.getMonth() + 1}`;
+                        const budget = await GM.getValue(BUDGET_KEY, {});
+                        if (budget[monthKey]) {
+                            budget[monthKey] = { tokensUsed: 0 };
+                            await GM.setValue(BUDGET_KEY, budget);
+                            showStatus("本月预算数据已重置!", true);
+                            renderTabContent("budget"); // 刷新显示
+                        }
+                    }
+                    catch (error) {
+                        console.error("重置预算失败:", error);
+                        showStatus("重置预算失败!", false);
                     }
                 }
-                catch (error) {
-                    console.error("重置预算失败:", error);
-                    showStatus("重置预算失败!", false);
-                }
-            }
-            // 测试 API 连接
-            async function testApiConnection() {
-                const statusDiv = document.getElementById("api-status");
-                if (!statusDiv)
-                    return;
-                const config = await getConfig();
-                if (!config.apiKey) {
-                    showStatus("请先输入 API 密钥!", false);
-                    return;
-                }
-                showStatus("正在测试 API 连接...", true);
-                try {
-                    const response = await AITools.callAPI('请回复"OK"表示连接成功', 5);
-                    if (response && response.includes("OK")) {
-                        showStatus("API 连接成功!", true);
+                // 测试 API 连接
+                async function testApiConnection() {
+                    const statusDiv = document.getElementById("content-guard-api-status");
+                    if (!statusDiv)
+                        return;
+                    const config = await getConfig();
+                    if (!config.apiKey) {
+                        showStatus("请先输入 API 密钥!", false);
+                        return;
                     }
-                    else {
-                        showStatus("API 响应异常", false);
+                    showStatus("正在测试 API 连接...", true);
+                    try {
+                        const response = await AITools.callAPI('请回复"OK"表示连接成功', 5);
+                        if (response && response.includes("OK")) {
+                            showStatus("API 连接成功!", true);
+                        }
+                        else {
+                            showStatus("API 响应异常", false);
+                        }
+                    }
+                    catch (error) {
+                        if (error instanceof Error)
+                            showStatus(`连接失败: ${error.message}`, false);
+                        else
+                            showStatus("连接失败", false);
                     }
                 }
-                catch (error) {
-                    if (error instanceof Error)
-                        showStatus(`连接失败: ${error.message}`, false);
-                    else
-                        showStatus("连接失败", false);
+                // 显示状态消息
+                function showStatus(message, isSuccess) {
+                    const statusDiv = document.getElementById("content-guard-api-status");
+                    if (!statusDiv)
+                        return;
+                    statusDiv.className = `content-guard-status-message ${isSuccess ? "content-guard-status-success" : "content-guard-status-error"}`;
+                    statusDiv.textContent = message;
+                    // 5秒后自动清除
+                    setTimeout(() => {
+                        statusDiv.textContent = "";
+                        statusDiv.className = "content-guard-status-message";
+                    }, 5000);
                 }
-            }
-            // 显示状态消息
-            function showStatus(message, isSuccess) {
-                const statusDiv = document.getElementById("api-status");
-                if (!statusDiv)
-                    return;
-                statusDiv.className = `status-message ${isSuccess ? "status-success" : "status-error"}`;
-                statusDiv.textContent = message;
-                // 5秒后自动清除
-                setTimeout(() => {
-                    statusDiv.textContent = "";
-                    statusDiv.className = "status-message";
-                }, 5000);
             }
         }
         Config.createConfigUI = createConfigUI;
@@ -1220,13 +1232,13 @@ var ContentGuard;
         class CooldownBlocker {
             seconds;
             challengeRequired;
-            static OVERLAY_ID = "cooldown-challenge-overlay";
-            static TIMER_ID = "cooldown-timer";
-            static CHALLENGE_COUNTER_ID = "challenge-counter";
-            static QUESTION_CONTAINER_ID = "question-container";
-            static ANSWER_INPUT_ID = "answer-input";
-            static SUBMIT_BUTTON_ID = "submit-button";
-            static STATUS_ID = "challenge-status";
+            static OVERLAY_ID = "content-guard-cooldown-challenge-overlay";
+            static TIMER_ID = "content-guard-cooldown-timer";
+            static CHALLENGE_COUNTER_ID = "content-guard-challenge-counter";
+            static QUESTION_CONTAINER_ID = "content-guard-question-container";
+            static ANSWER_INPUT_ID = "content-guard-answer-input";
+            static SUBMIT_BUTTON_ID = "content-guard-submit-button";
+            static STATUS_ID = "content-guard-challenge-status";
             remainingSeconds;
             correctCount = 0;
             currentQuestion = null;
@@ -1646,14 +1658,11 @@ var ContentGuard;
                 return new Lock(Lock.nextId++);
             }
         }
-        const locks = []; // 必须移除所有锁，才会真正隐藏预拦截器
-        // 全局状态
+        const locks = [];
+        // 全局状态 - 全部重置为可重新初始化的状态
         let blockerCreated = false;
-        let bodyObserver = null;
-        let blockerRemoved = false;
         let blockerElement = null;
         let styleElement = null;
-        // 安全创建元素函数
         const safeCreateElement = (tag, attributes = {}, text) => {
             const el = document.createElement(tag);
             Object.entries(attributes).forEach(([key, value]) => {
@@ -1668,7 +1677,6 @@ var ContentGuard;
                 el.textContent = text;
             return el;
         };
-        // 解析样式字符串为对象
         const parseStyles = (styleStr) => {
             return styleStr.split(";").reduce((styles, rule) => {
                 const [key, value] = rule.split(":").map((s) => s.trim());
@@ -1682,17 +1690,25 @@ var ContentGuard;
             locks.push(lock);
             return lock;
         };
-        // 创建初始拦截遮罩（与正式拦截器统一风格）
         PreBlocker.show = () => {
+            // 如果元素仍在移除过程中，先强制完成移除
+            if (blockerElement && blockerElement.parentNode) {
+                blockerElement.parentNode.removeChild(blockerElement);
+                blockerElement = null;
+            }
+            if (styleElement && styleElement.parentNode) {
+                styleElement.parentNode.removeChild(styleElement);
+                styleElement = null;
+            }
+            // 重置创建状态
+            blockerCreated = false;
             if (blockerCreated)
                 return;
             blockerCreated = true;
-            // 确保文档根元素存在
             if (!document.documentElement) {
                 console.warn("[PreBlocker] document.documentElement 不存在");
                 return;
             }
-            // 创建遮罩容器
             blockerElement = safeCreateElement("div", {
                 id: "pre-blocker-overlay",
                 style: `
@@ -1715,7 +1731,6 @@ var ContentGuard;
                 box-sizing: border-box;
             `,
             });
-            // 添加视觉干扰元素（与正式拦截器一致）
             const noise = safeCreateElement("div", {
                 style: `
                 position: absolute;
@@ -1728,7 +1743,6 @@ var ContentGuard;
             `,
             });
             blockerElement.appendChild(noise);
-            // 添加加载图标（替代正式拦截器的警示图标）
             const spinner = safeCreateElement("div", {
                 style: `
                 width: 60px;
@@ -1740,94 +1754,46 @@ var ContentGuard;
                 margin-bottom: 20px;
             `,
             });
-            // 添加提示文本
             const hint = safeCreateElement("div", {
                 style: "margin-bottom: 30px; opacity: 0.8;",
             }, "正在进行内容安全审查...");
-            // 添加动画样式
             styleElement = safeCreateElement("style");
             styleElement.textContent = `
             @keyframes spin {
                 to { transform: rotate(360deg); }
             }
         `;
-            // 组装元素
             blockerElement.appendChild(spinner);
             blockerElement.appendChild(hint);
-            // 添加到文档
             document.documentElement.appendChild(styleElement);
             document.documentElement.appendChild(blockerElement);
-            // 防止用户交互
             blockerElement.oncontextmenu = (e) => e.preventDefault();
             blockerElement.onselectstart = (e) => e.preventDefault();
-            // 使用MutationObserver等待body可用
-            if (!bodyObserver) {
-                bodyObserver = new MutationObserver(() => {
-                    if (document.body && !blockerRemoved) {
-                        // 确保body存在后再设置overflow
-                        document.body.style.overflow = "hidden";
-                        // 添加滚动锁定
-                        const preventScroll = (e) => {
-                            if (blockerCreated && !blockerRemoved) {
-                                e.preventDefault();
-                                e.stopPropagation();
-                            }
-                        };
-                        document.addEventListener("wheel", preventScroll, { passive: false });
-                        document.addEventListener("touchmove", preventScroll, { passive: false });
-                        document.addEventListener("keydown", (e) => {
-                            if ([32, 33, 34, 35, 36, 38, 40].includes(e.keyCode)) {
-                                preventScroll(e);
-                            }
-                        });
-                    }
-                });
-                bodyObserver.observe(document.documentElement, {
-                    childList: true,
-                    subtree: true,
-                });
-            }
         };
-        // 移除拦截器
         PreBlocker.remove = (lock) => {
-            if (blockerRemoved || !blockerCreated)
+            if (!blockerCreated || !blockerElement)
                 return;
-            // 从全局列表移除这个锁
             const lockIndex = locks.indexOf(lock);
             if (lockIndex === -1)
                 return;
             locks.splice(lockIndex, 1);
             if (locks.length !== 0)
                 return;
-            // 锁列表为空，真正执行移除
-            blockerRemoved = true;
-            if (blockerElement) {
-                blockerElement.style.opacity = "0";
-                blockerElement.style.transition = "opacity 0.5s ease";
-                setTimeout(() => {
-                    if (blockerElement && blockerElement.parentNode) {
-                        blockerElement.parentNode.removeChild(blockerElement);
-                    }
-                    // 移除样式标签
-                    if (styleElement && styleElement.parentNode) {
-                        styleElement.parentNode.removeChild(styleElement);
-                    }
-                    // 恢复滚动
-                    if (document.body) {
-                        document.body.style.overflow = "";
-                    }
-                    // 停止观察
-                    if (bodyObserver) {
-                        bodyObserver.disconnect();
-                        bodyObserver = null;
-                    }
-                    // 重置状态
+            blockerElement.style.opacity = "0";
+            blockerElement.style.transition = "opacity 0.5s ease";
+            setTimeout(() => {
+                if (blockerElement && blockerElement.parentNode) {
+                    blockerElement.parentNode.removeChild(blockerElement);
                     blockerElement = null;
+                }
+                if (styleElement && styleElement.parentNode) {
+                    styleElement.parentNode.removeChild(styleElement);
                     styleElement = null;
-                }, 500);
-            }
+                }
+                // 重置状态以允许重新初始化
+                blockerCreated = false;
+            }, 500);
         };
-        // DOM就绪检查
         const waitForDOMReady = (callback) => {
             if (document.readyState === "loading") {
                 document.addEventListener("DOMContentLoaded", callback);
@@ -1836,7 +1802,6 @@ var ContentGuard;
                 setTimeout(callback, 0);
             }
         };
-        // 初始化函数（在document-start调用）
         PreBlocker.init = () => {
             try {
                 PreBlocker.show();
@@ -2374,8 +2339,10 @@ var ContentGuard;
             }
             if (config.saveMode && !strict) {
                 const prob = await Config.CreditSystem.getProb(window.location.hostname);
-                if (Math.random() < prob) {
+                const rand = Math.random();
+                if (rand > prob) {
                     console.log("[ContentGuard] 经济模式下，取消采样");
+                    console.log(`${rand} > ${prob}`);
                     return;
                 }
             }
@@ -2440,9 +2407,9 @@ var ContentGuard;
         if (!config.apiKey) {
             setTimeout(() => {
                 Config.createConfigUI();
-                const statusDiv = document.getElementById("api-status");
+                const statusDiv = document.getElementById("content-guard-api-status");
                 if (statusDiv) {
-                    statusDiv.className = "status-message status-error";
+                    statusDiv.className = "content-guard-status-message content-guard-status-error";
                     statusDiv.textContent = "请配置 API 密钥以启用内容过滤功能";
                 }
             }, 2000);
@@ -2459,7 +2426,7 @@ var ContentGuard;
     // 创建预拦截器遮罩
     const mainLock = ContentGuard.PreBlocker.init();
     let ensureSkip = false;
-    ContentGuard.Core.ensureSkip().then(skip => {
+    ContentGuard.Core.ensureSkip().then((skip) => {
         if (skip) {
             // 直接隐藏遮罩
             ContentGuard.PreBlocker.remove(mainLock);
@@ -2468,14 +2435,43 @@ var ContentGuard;
     });
     // 设置样式
     GM_addStyle(STYLE);
-    window.addEventListener("DOMContentLoaded", () => {
-        ContentGuard.initContentGuard();
+    // 检查页面内容是否充足
+    const hasContent = () => {
+        // innerText 内容足够
+        const visibleText = document.body.innerText.replace(/\s/g, "");
+        if (visibleText.length < 100)
+            return false;
+        // 尝试采样网页
+        const sample = ContentGuard.WebSampler.sampleContent(512);
+        if (sample.length < 100)
+            return false;
+        return true;
+    };
+    let checked = false; // 是否已经执行过检查
+    /**
+     * 如果内容充足，就检查页面
+     * @param force 如果 force 为真，强制检查
+     */
+    const conditionalCheck = async (force = false) => {
         if (ensureSkip)
             return;
-        setTimeout(async () => {
+        if (checked)
+            return; // 始终不重复检查
+        if (force || hasContent()) {
+            checked = true;
             await ContentGuard.Core.checkPage();
-            // 无论结果如何，删除预拦截器遮罩
             ContentGuard.PreBlocker.remove(mainLock);
-        }, 500);
+        }
+        else {
+            console.log("未提取到足够内容，等待重试");
+        }
+    };
+    window.addEventListener("DOMContentLoaded", () => {
+        ContentGuard.initContentGuard();
+        setTimeout(() => conditionalCheck(), 1000);
+        setTimeout(() => conditionalCheck(), 3000);
+    });
+    window.addEventListener("load", () => {
+        setTimeout(() => conditionalCheck(true), 2000);
     }, { once: true });
 })();
