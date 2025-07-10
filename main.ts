@@ -2,16 +2,19 @@
 // @name         ContentGuard - AI Content Filter
 // @namespace    https://your-namespace.com
 // @version      1.0
-// @description  AI-powered content filter with secure API key management
+// @license      MIT
+// @description  基于人工智能的敏感内容过滤系统
 // @author       normalpcer & DeepSeek R1
 // @match        *://*/*
 // @grant        GM.getValue
 // @grant        GM.setValue
 // @grant        GM_xmlhttpRequest
 // @grant        GM_addStyle
-// @connect      api.deepseek.com
+// @connect      *
 // @require      https://cdn.jsdelivr.net/npm/vue@3.2.47/dist/vue.global.prod.js
+// @run-at document-start
 // ==/UserScript==
+//
 
 const DEBUG_MODE = true;
 
@@ -408,7 +411,7 @@ namespace ContentGuard {
                 yesterday: { date: string; tokens: number } | null; // 昨日使用量
             };
         }
-        
+
         // 网站信用相关数据
         export interface CreditData {
             amount: number; // 信用分
@@ -670,6 +673,7 @@ namespace ContentGuard {
             const config = await getConfig();
             if (config.strictCount > 0) {
                 config.strictCount--;
+                saveConfig(config);
                 return true;
             }
             return false;
@@ -1814,6 +1818,254 @@ namespace ContentGuard {
     }
 
     /**
+     * 预拦截器
+     * @author DeepSeek R1
+     */
+    export namespace PreBlocker {
+        class Lock {
+            static nextId: number = 0;
+            constructor(private id: number) {}
+
+            static generate(): Lock {
+                return new Lock(Lock.nextId++);
+            }
+        }
+
+        const locks: Lock[] = []; // 必须移除所有锁，才会真正隐藏预拦截器
+
+        // 全局状态
+        let blockerCreated = false;
+        let bodyObserver: MutationObserver | null = null;
+        let blockerRemoved = false;
+        let blockerElement: HTMLDivElement | null = null;
+        let styleElement: HTMLStyleElement | null = null;
+
+        // 安全创建元素函数
+        const safeCreateElement = (
+            tag: string,
+            attributes: Record<string, string> = {},
+            text?: string
+        ): HTMLElement => {
+            const el = document.createElement(tag);
+
+            Object.entries(attributes).forEach(([key, value]) => {
+                if (key === "style") {
+                    Object.assign(el.style, parseStyles(value));
+                } else {
+                    el.setAttribute(key, value);
+                }
+            });
+
+            if (text) el.textContent = text;
+            return el;
+        };
+
+        // 解析样式字符串为对象
+        const parseStyles = (styleStr: string): Record<string, string> => {
+            return styleStr.split(";").reduce((styles, rule) => {
+                const [key, value] = rule.split(":").map((s) => s.trim());
+                if (key && value) styles[key.replace(/-./g, (m) => m[1].toUpperCase())] = value;
+                return styles;
+            }, {} as Record<string, string>);
+        };
+
+        const makeLock = (): Lock => {
+            const lock = Lock.generate();
+            locks.push(lock);
+            return lock;
+        };
+
+        // 创建初始拦截遮罩（与正式拦截器统一风格）
+        export const show = (): void => {
+            if (blockerCreated) return;
+            blockerCreated = true;
+
+            // 确保文档根元素存在
+            if (!document.documentElement) {
+                console.warn("[PreBlocker] document.documentElement 不存在");
+                return;
+            }
+
+            // 创建遮罩容器
+            blockerElement = safeCreateElement("div", {
+                id: "pre-blocker-overlay",
+                style: `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100vw;
+                height: 100vh;
+                background: rgba(0, 0, 0, 1);
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                z-index: 2147483647;
+                color: white;
+                font-size: 20px;
+                font-family: sans-serif;
+                backdrop-filter: blur(8px);
+                padding: 20px;
+                box-sizing: border-box;
+            `,
+            }) as HTMLDivElement;
+
+            // 添加视觉干扰元素（与正式拦截器一致）
+            const noise = safeCreateElement("div", {
+                style: `
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background-image: repeating-linear-gradient(0deg, rgba(255,255,255,0.03), rgba(255,255,255,0.03) 1px, transparent 1px, transparent 4px);
+                pointer-events: none;
+            `,
+            });
+            blockerElement.appendChild(noise);
+
+            // 添加加载图标（替代正式拦截器的警示图标）
+            const spinner = safeCreateElement("div", {
+                style: `
+                width: 60px;
+                height: 60px;
+                border: 5px solid rgba(255,255,255,0.3);
+                border-radius: 50%;
+                border-top-color: white;
+                animation: spin 1s linear infinite;
+                margin-bottom: 20px;
+            `,
+            });
+
+            // 添加提示文本
+            const hint = safeCreateElement(
+                "div",
+                {
+                    style: "margin-bottom: 30px; opacity: 0.8;",
+                },
+                "正在进行内容安全审查..."
+            );
+
+            // 添加动画样式
+            styleElement = safeCreateElement("style") as HTMLStyleElement;
+            styleElement.textContent = `
+            @keyframes spin {
+                to { transform: rotate(360deg); }
+            }
+        `;
+
+            // 组装元素
+            blockerElement.appendChild(spinner);
+            blockerElement.appendChild(hint);
+
+            // 添加到文档
+            document.documentElement.appendChild(styleElement);
+            document.documentElement.appendChild(blockerElement);
+
+            // 防止用户交互
+            blockerElement.oncontextmenu = (e) => e.preventDefault();
+            blockerElement.onselectstart = (e) => e.preventDefault();
+
+            // 使用MutationObserver等待body可用
+            if (!bodyObserver) {
+                bodyObserver = new MutationObserver(() => {
+                    if (document.body && !blockerRemoved) {
+                        // 确保body存在后再设置overflow
+                        document.body.style.overflow = "hidden";
+
+                        // 添加滚动锁定
+                        const preventScroll = (e: Event) => {
+                            if (blockerCreated && !blockerRemoved) {
+                                e.preventDefault();
+                                e.stopPropagation();
+                            }
+                        };
+
+                        document.addEventListener("wheel", preventScroll, { passive: false });
+                        document.addEventListener("touchmove", preventScroll, { passive: false });
+                        document.addEventListener("keydown", (e) => {
+                            if ([32, 33, 34, 35, 36, 38, 40].includes(e.keyCode)) {
+                                preventScroll(e);
+                            }
+                        });
+                    }
+                });
+
+                bodyObserver.observe(document.documentElement, {
+                    childList: true,
+                    subtree: true,
+                });
+            }
+        };
+
+        // 移除拦截器
+        export const remove = (lock: Lock): void => {
+            if (blockerRemoved || !blockerCreated) return;
+
+            // 从全局列表移除这个锁
+            const lockIndex = locks.indexOf(lock);
+            if (lockIndex === -1) return;
+            locks.splice(lockIndex, 1);
+            if (locks.length !== 0) return;
+
+            // 锁列表为空，真正执行移除
+
+            blockerRemoved = true;
+
+            if (blockerElement) {
+                blockerElement.style.opacity = "0";
+                blockerElement.style.transition = "opacity 0.5s ease";
+
+                setTimeout(() => {
+                    if (blockerElement && blockerElement.parentNode) {
+                        blockerElement.parentNode.removeChild(blockerElement);
+                    }
+
+                    // 移除样式标签
+                    if (styleElement && styleElement.parentNode) {
+                        styleElement.parentNode.removeChild(styleElement);
+                    }
+
+                    // 恢复滚动
+                    if (document.body) {
+                        document.body.style.overflow = "";
+                    }
+
+                    // 停止观察
+                    if (bodyObserver) {
+                        bodyObserver.disconnect();
+                        bodyObserver = null;
+                    }
+
+                    // 重置状态
+                    blockerElement = null;
+                    styleElement = null;
+                }, 500);
+            }
+        };
+
+        // DOM就绪检查
+        const waitForDOMReady = (callback: () => void): void => {
+            if (document.readyState === "loading") {
+                document.addEventListener("DOMContentLoaded", callback);
+            } else {
+                setTimeout(callback, 0);
+            }
+        };
+
+        // 初始化函数（在document-start调用）
+        export const init = (): Lock => {
+            try {
+                show();
+            } catch (e) {
+                console.error("[PreBlocker] 初始创建失败:", e);
+                waitForDOMReady(show);
+            }
+            return makeLock();
+        };
+    }
+
+    /**
      * 针对搜索引擎界面优化的特殊检测逻辑
      * @author DeepSeek R1
      */
@@ -2322,21 +2574,42 @@ namespace ContentGuard {
         }
 
         /**
-         * 检查当前网页内容，并执行相关策略
+         * 这个网页是否一定可以跳过检查
+         * 当前可能的情况：
+         * 1. 处于白名单
+         * 2. 处于测试模式，存在相关选项
          */
-        export async function checkPage(): Promise<void> {
-            const config = await Config.getConfig();
+        export async function ensureSkip(
+            config: Config.AppConfig | null = null
+        ): Promise<boolean> {
+            if (config === null) {
+                config = await Config.getConfig();
+            }
             const currentUrl = window.location.href;
 
             if (Config.isWhitelisted(currentUrl, config.whitelist)) {
                 console.log("[ContentGuard] 白名单网站，跳过审查");
-                return;
+                return true;
             }
 
             if (DEBUG_MODE && window.location.href.includes("no-content-guard")) {
                 console.log("[ContentGuard] 测试模式，跳过审查");
+                return true;
+            }
+
+            return false;
+        }
+
+        /**
+         * 检查当前网页内容，并执行相关策略
+         */
+        export async function checkPage(): Promise<void> {
+            const config = await Config.getConfig();
+
+            if (await ensureSkip(config)) {
                 return;
             }
+            
 
             // 获取 Rating 之后的处理步骤
             const blockByRating = (rating: Rating | null) => {
@@ -2357,19 +2630,26 @@ namespace ContentGuard {
                 // 尝试获取搜索关键词
                 SearchObserver.start([
                     async (data) => {
+                        searchMode = true;
+                        // 开启搜索模式的遮罩
+                        const searchLock = PreBlocker.init();
+
+                        // 执行逻辑
                         if (searchMode) {
                             // 已经不是初次调用，重新等待网页搜索
                             console.log("等待重新搜索");
                             await new Promise<void>((resolve) => setTimeout(resolve, 3000));
                             console.log("停止等待");
                         }
-                        searchMode = true;
                         const query = data.query;
                         const rating = await getSearchPageRating(
                             query,
                             WebSampler.sampleContent(764)
                         );
                         blockByRating(rating);
+
+                        // 移除遮罩
+                        PreBlocker.remove(searchLock);
                     },
                 ]);
 
@@ -2378,7 +2658,10 @@ namespace ContentGuard {
 
             // 经济模式下，非搜索页有概率直接取消采样
             // 除非同时处于严格模式
-            const strict = Config.isStrictMode();
+            const strict = await Config.isStrictMode();
+            if (strict) {
+                console.log("当前处于严格模式");
+            }
             if (config.saveMode && !strict) {
                 const prob = await Config.CreditSystem.getProb(window.location.hostname);
                 if (Math.random() < prob) {
@@ -2470,19 +2753,31 @@ namespace ContentGuard {
         return;
     }
 
+    
+    // 创建预拦截器遮罩
+    const mainLock = ContentGuard.PreBlocker.init();
+    let ensureSkip = false;
+    ContentGuard.Core.ensureSkip().then(skip => {
+        if (skip) {
+            // 直接隐藏遮罩
+            ContentGuard.PreBlocker.remove(mainLock);
+            ensureSkip = true;
+        }
+    })
+
     // 设置样式
     GM_addStyle(STYLE);
-
-    ContentGuard.initContentGuard();
-
+    
     window.addEventListener(
-        "load",
+        "DOMContentLoaded",
         () => {
-            setTimeout(() => {
-                ContentGuard.Core.checkPage().catch((err) => {
-                    console.error(err);
-                });
-            }, 2000);
+            ContentGuard.initContentGuard();
+            if (ensureSkip) return;
+            setTimeout(async () => {
+                await ContentGuard.Core.checkPage();
+                // 无论结果如何，删除预拦截器遮罩
+                ContentGuard.PreBlocker.remove(mainLock);
+            }, 500);
         },
         { once: true }
     );
