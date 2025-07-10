@@ -308,6 +308,8 @@ var ContentGuard;
         }
         /**
          * 判断URL是否符合带通配符的约束模式
+         * @author DeepSeek R1
+         *
          * @param url 要检查的URL字符串
          * @param pattern 通配符模式，格式为 (a)://(b)/(c)
          * @returns 是否匹配
@@ -381,15 +383,105 @@ var ContentGuard;
         const KEY_PREFIX = "content_guard_";
         const CONFIG_KEY = KEY_PREFIX + "config";
         const BUDGET_KEY = KEY_PREFIX + "budget";
+        const CREDITS_KEY = KEY_PREFIX + "credits";
         // 默认配置
         const DEFAULT_CONFIG = {
             apiKey: "",
             baseUrl: "https://api.deepseek.com/v1",
             modelName: "deepseek-chat",
-            budgetLimit: 2000.0,
+            budgetLimit: 2e6,
             saveMode: true,
             whitelist: [],
+            strictCount: 0,
         };
+        let CreditSystem;
+        (function (CreditSystem) {
+            const DEFAULT_CREDIT = 0;
+            const MIN_CREDIT = -10;
+            const MAX_CREDIT = 10;
+            async function getCreditData(host) {
+                try {
+                    const credits = await GM.getValue(CREDITS_KEY, {});
+                    if (!credits[host]) {
+                        credits[host] = { amount: DEFAULT_CREDIT, safeTimestamps: [] };
+                    }
+                    return credits[host];
+                }
+                catch (error) {
+                    console.error("获取信用数据失败:", error);
+                    return { amount: DEFAULT_CREDIT, safeTimestamps: [] };
+                }
+            }
+            CreditSystem.getCreditData = getCreditData;
+            async function updateCreditData(host, data) {
+                try {
+                    const credits = await GM.getValue(CREDITS_KEY, {});
+                    credits[host] = data;
+                    await GM.setValue(CREDITS_KEY, credits);
+                }
+                catch (error) {
+                    console.error("更新信用数据失败:", error);
+                }
+            }
+            async function increaseCredit(host, amount) {
+                const creditData = await getCreditData(host);
+                creditData.amount += amount;
+                creditData.amount = Math.min(creditData.amount, MAX_CREDIT * 1.2);
+                creditData.amount = Math.max(creditData.amount, MIN_CREDIT * 1.2);
+                await updateCreditData(host, creditData);
+            }
+            CreditSystem.increaseCredit = increaseCredit;
+            /**
+             * 记录安全标记（marksafe）
+             * 更新最近三次安全标记的时间戳
+             */
+            async function markSafe(host) {
+                const creditData = await getCreditData(host);
+                const now = Date.now();
+                // 初始化或更新安全时间戳数组
+                if (!creditData.safeTimestamps) {
+                    creditData.safeTimestamps = [now];
+                }
+                else {
+                    // 保留最近三次记录
+                    const timestamps = [...creditData.safeTimestamps, now];
+                    creditData.safeTimestamps = timestamps.slice(-3);
+                }
+                await updateCreditData(host, creditData);
+            }
+            CreditSystem.markSafe = markSafe;
+            /**
+             * 检查是否满足安全条件（1小时内3次安全标记）
+             */
+            async function isFrequentSafe(host) {
+                const creditData = await getCreditData(host);
+                const now = Date.now();
+                if (!creditData.safeTimestamps || creditData.safeTimestamps.length < 3) {
+                    return false;
+                }
+                // 检查所有时间戳是否都在1小时内
+                return creditData.safeTimestamps.every((timestamp) => now - timestamp <= 3600 * 1000);
+            }
+            /**
+             * 获取网页采样概率（基于信用分）
+             * 如果1小时内有3次安全标记，返回固定概率10%
+             */
+            async function getProb(host) {
+                // 检查安全标记条件
+                if (await isFrequentSafe(host)) {
+                    console.log("安全模式激活：固定采样率10%");
+                    return 0.1;
+                }
+                // 正常信用分计算
+                let score = (await CreditSystem.getCreditData(host)).amount;
+                console.log("信用分：", score);
+                score = Math.min(Math.max(score, MIN_CREDIT), MAX_CREDIT);
+                const result = Math.log(11.5 - score) / Math.log(1.4) / 10;
+                console.log("采样概率：", result);
+                return result;
+            }
+            CreditSystem.getProb = getProb;
+        })(CreditSystem = Config.CreditSystem || (Config.CreditSystem = {}));
         // 获取配置
         async function getConfig() {
             try {
@@ -432,12 +524,40 @@ var ContentGuard;
             try {
                 const now = new Date();
                 const monthKey = `${now.getFullYear()}-${now.getMonth() + 1}`;
+                const today = now.toISOString().slice(0, 10); // YYYY-MM-DD
                 const budget = await GM.getValue(BUDGET_KEY, {});
-                if (!budget[monthKey]) {
-                    budget[monthKey] = { tokensUsed: 0 };
+                let monthData = budget[monthKey] || { tokensUsed: 0 };
+                // 更新月总量
+                monthData.tokensUsed = (monthData.tokensUsed || 0) + tokensUsed;
+                // 更新日记录
+                if (!monthData.dailyUsage) {
+                    monthData.dailyUsage = {
+                        today: { date: today, tokens: tokensUsed },
+                        yesterday: null,
+                    };
                 }
-                budget[monthKey].tokensUsed += tokensUsed;
+                else {
+                    const { dailyUsage } = monthData;
+                    if (dailyUsage.today.date === today) {
+                        // 当天记录累加
+                        dailyUsage.today.tokens += tokensUsed;
+                    }
+                    else {
+                        // 日期变化：今天变昨天，新建今天记录
+                        dailyUsage.yesterday = dailyUsage.today;
+                        dailyUsage.today = { date: today, tokens: tokensUsed };
+                    }
+                }
+                budget[monthKey] = monthData;
                 await GM.setValue(BUDGET_KEY, budget);
+                // 检查日用量是否超过月预算5%
+                const config = await getConfig();
+                const dailyLimit = config.budgetLimit * 0.05;
+                if (monthData.dailyUsage.today.tokens > dailyLimit) {
+                    const message = `今日用量已达月预算 5%: ${monthData.dailyUsage.today.tokens.toLocaleString()}/${Math.floor(dailyLimit).toLocaleString()} 字符`;
+                    console.warn(message);
+                    alert(message);
+                }
             }
             catch (error) {
                 console.error("更新预算失败:", error);
@@ -488,6 +608,26 @@ var ContentGuard;
                 return `*.${parts.slice(-2).join(".")}`;
             }
         }
+        /**
+         * 判断当前是否处于严格模式下。
+         * 如果是，将会消耗一次计数
+         */
+        async function isStrictMode() {
+            const config = await getConfig();
+            if (config.strictCount > 0) {
+                config.strictCount--;
+                return true;
+            }
+            return false;
+        }
+        Config.isStrictMode = isStrictMode;
+        // 获取今日使用量（实用函数）
+        async function getTodayUsage() {
+            const budget = await getBudgetData();
+            const today = new Date().toISOString().slice(0, 10);
+            return budget.dailyUsage?.today.date === today ? budget.dailyUsage.today.tokens : 0;
+        }
+        Config.getTodayUsage = getTodayUsage;
         // 创建配置界面
         function createConfigUI() {
             const CONTAINER_ID = "content-guard-container";
@@ -806,7 +946,7 @@ var ContentGuard;
             }
             try {
                 const requestData = {
-                    model: "deepseek-chat",
+                    model: config.modelName,
                     messages: [{ role: "user", content: prompt }],
                     max_tokens: maxTokens,
                     temperature: 0.7,
@@ -834,6 +974,9 @@ var ContentGuard;
                                     const tokensUsed = data.usage?.total_tokens || 100;
                                     Config.updateBudget(tokensUsed);
                                     console.log("API result", result);
+                                    ContentGuard.Config.getTodayUsage().then((usage) => {
+                                        console.log("[ContentGuard] 本日已用 token", usage);
+                                    });
                                     resolve(result);
                                 }
                                 else {
@@ -1044,6 +1187,28 @@ var ContentGuard;
             }
         }
         Blocker.TestBlocker = TestBlocker;
+        class NoneBlocker {
+            execute() {
+                // 不进行操作
+            }
+        }
+        Blocker.NoneBlocker = NoneBlocker;
+        /**
+         * 将接下来几次访问标记为严格模式
+         */
+        class MarkStrictBlocker {
+            times;
+            constructor(times) {
+                this.times = times;
+            }
+            async execute() {
+                console.log("标记严格模式");
+                const config = await Config.getConfig();
+                config.strictCount = Math.max(config.strictCount, this.times);
+                await Config.saveConfig(config);
+            }
+        }
+        Blocker.MarkStrictBlocker = MarkStrictBlocker;
         /**
          * 提供强制冷却时间的拦截器
          * @author DeepSeek R1 & normalpcer
@@ -1444,6 +1609,22 @@ var ContentGuard;
             }
         }
         Blocker.CooldownBlocker = CooldownBlocker;
+        /**
+         * 组合拦截器
+         * 将会依次执行几个拦截器
+         */
+        class CombinedBlocker {
+            blockers;
+            constructor(blockers) {
+                this.blockers = blockers;
+            }
+            execute() {
+                for (const x of this.blockers) {
+                    x.execute();
+                }
+            }
+        }
+        Blocker.CombinedBlocker = CombinedBlocker;
     })(Blocker = ContentGuard.Blocker || (ContentGuard.Blocker = {}));
     /**
      * 针对搜索引擎界面优化的特殊检测逻辑
@@ -1751,19 +1932,23 @@ var ContentGuard;
             Rating[Rating["L4_WARNING"] = 4] = "L4_WARNING";
             Rating[Rating["L5_EXPLICIT"] = 5] = "L5_EXPLICIT";
         })(Rating = Core.Rating || (Core.Rating = {}));
+        function getCreditByRating(rating) {
+            const values = [0.3, 0, -0.3, -0.5, -1, -1.5];
+            return values[rating] ?? 0;
+        }
         /**
          * 用于 AI 评分的 prompt
          */
         const AI_JUDGE_PROMPT = `
-严格按照 JSON 格式返回：{"score": 0-5, "info": "5-30字的原因"}。
-根据以下内容，给我接下来输入的文字评 0~5 分。
+严格按照JSON返回{"score": 0-5, "info": "5-30字的原因"}。
 0. 无敏感内容
-1. 过度身体评价/极轻微性暗示（“撩人”）/轻度人身攻击
-2. 敏感部位评价/少量性暗示/轻微物化（“性感色气”）/人身攻击、脏话
-3. 一般性暗示、物化、凝视（“诱惑”）/少量性幻想（“想亲”）/群体歧视，煽动对立
-4. 软色情，严重性暗示、物化/性行为隐喻/裸露场景描写/更多性幻想/侵犯隐私
-5. 明确色情/隐喻严重性暴力/极明确性暗示/能判断是色情网站
-涉及未成年，或相关内容过多，酌情提升等级。`;
+1. 过度身体评价/极轻微性暗示/轻度人身攻击
+2. 敏感部位评价/少量性暗示、物化/人身攻击、脏话
+3. 一般性暗示等/少量性幻想/群体歧视，煽动对立
+4. 软色情，严重性暗示等/性行为隐喻/裸露场景/更多性幻想/侵犯隐私
+5. 明确色情、性暗示/隐喻严重性暴力/能判断是色情网站
+涉未成年或相关内容过多，酌情升级。
+给以下文字评0~5分。`;
         class AIJudgeResponse {
             score;
             info;
@@ -1795,30 +1980,42 @@ var ContentGuard;
          */
         class BlockerFactory {
             static createForRating(rating) {
-                switch (rating) {
-                    case Rating.L0_SAFE:
-                        return new Blocker.TestBlocker();
-                    case Rating.L1_MILD:
-                        return new Blocker.TestBlocker();
-                    case Rating.L2_SENSITIVE:
-                        return new Blocker.CooldownBlocker(15, 0);
-                    case Rating.L3_STRONG:
-                        return new Blocker.CooldownBlocker(45, 2);
-                    case Rating.L4_WARNING:
-                        return new Blocker.CooldownBlocker(90, 3);
-                    case Rating.L5_EXPLICIT:
-                        return new Blocker.CooldownBlocker(180, 5);
-                    default:
-                        throw new Error(`Invalid rating: ${rating}`);
-                }
+                const baseBlocker = (() => {
+                    switch (rating) {
+                        case Rating.L0_SAFE:
+                            return new Blocker.NoneBlocker();
+                        case Rating.L1_MILD:
+                            return new Blocker.NoneBlocker();
+                        case Rating.L2_SENSITIVE:
+                            return new Blocker.CooldownBlocker(15, 0);
+                        case Rating.L3_STRONG:
+                            return new Blocker.CooldownBlocker(45, 2);
+                        case Rating.L4_WARNING:
+                            return new Blocker.CooldownBlocker(90, 3);
+                        case Rating.L5_EXPLICIT:
+                            return new Blocker.CooldownBlocker(180, 5);
+                        default:
+                            throw new Error(`Invalid rating: ${rating}`);
+                    }
+                })();
+                const extraBlocker = (() => {
+                    switch (rating) {
+                        case Rating.L0_SAFE:
+                            return new Blocker.NoneBlocker();
+                        case Rating.L1_MILD:
+                            return new Blocker.MarkStrictBlocker(1);
+                        default:
+                            return new Blocker.MarkStrictBlocker(2);
+                    }
+                })();
+                return new Blocker.CombinedBlocker([baseBlocker, extraBlocker]);
             }
         }
         /**
          * 获取当前页面的评级
          */
         async function getPageRating(content) {
-            if (DEBUG_MODE)
-                return Rating.L2_SENSITIVE;
+            // if (DEBUG_MODE) return Rating.L2_SENSITIVE;
             // 构建完整提示词
             const fullPrompt = AI_JUDGE_PROMPT + "文本信息：" + content;
             const value = await AITools.callAPI(fullPrompt);
@@ -1838,7 +2035,30 @@ var ContentGuard;
          * - 会向 AI 提交搜索主题，随后再接网页摘要。
          * - 当搜索内容变更时，重新检查
          */
+        /**
+         * 以“搜索模式”检查网页内容。
+         * 特性：
+         * - 会向 AI 提交搜索主题，随后再接网页摘要。
+         * - 当搜索内容变更时，重新检查
+         */
         async function getSearchPageRating(query, content) {
+            // 特别地，如果搜索包含 site:白名单网站，直接返回安全
+            // ... 帮助我实现，进入分支也需要 console.log
+            // 检查查询中是否包含 site: 白名单域名
+            const siteRegex = /site:\s*([\w.-]+)/gi;
+            const siteMatch = siteRegex.exec(query);
+            if (siteMatch) {
+                const domain = siteMatch[1];
+                const hypotheticalUrl = `https://${domain}/`;
+                const config = await Config.getConfig();
+                if (Config.isWhitelisted(hypotheticalUrl, config.whitelist)) {
+                    console.log(`检测到白名单域名: ${domain}，直接返回安全评级`);
+                    return Rating.L0_SAFE;
+                }
+                else {
+                    console.log(`检测到 site: 限定域名，但不在白名单: ${domain}`);
+                }
+            }
             const MAX_QUERY = 40;
             if (query.length > MAX_QUERY)
                 query = query.substring(0, MAX_QUERY);
@@ -1903,10 +2123,29 @@ var ContentGuard;
                 ]);
                 await timeout;
             }
+            // 经济模式下，非搜索页有概率直接取消采样
+            // 除非同时处于严格模式
+            const strict = Config.isStrictMode();
+            if (config.saveMode && !strict) {
+                const prob = await Config.CreditSystem.getProb(window.location.hostname);
+                if (Math.random() < prob) {
+                    console.log("[ContentGuard] 经济模式下，取消采样");
+                    return;
+                }
+            }
             // 当前如果处于搜索模式，则已经开始处理了，不需要重复处理
             if (!searchMode) {
-                const rating = await getPageRating(WebSampler.sampleContent(764));
+                const sampleLength = config.saveMode ? 512 : 764; // 进一步缩减采样长度
+                const rating = await getPageRating(WebSampler.sampleContent(sampleLength));
+                if (rating === null) {
+                    console.error("Cannot get page rating.");
+                    return;
+                }
                 blockByRating(rating);
+                await Config.CreditSystem.increaseCredit(window.location.hostname, getCreditByRating(rating));
+                if (rating === Rating.L0_SAFE) {
+                    Config.CreditSystem.markSafe(window.location.hostname);
+                }
             }
         }
         Core.checkPage = checkPage;
