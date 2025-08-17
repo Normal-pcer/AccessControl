@@ -1382,7 +1382,11 @@ namespace ContentGuard {
             private timerInterval: number | null = null;
             private attempts: number = 0;
 
-            constructor(private seconds: number, private challengeRequired: number) {
+            constructor(
+                private seconds: number,
+                private challengeRequired: number,
+                private closeAtSecond: number = -1 // 将在倒计时达到指定时间时直接关闭网页
+            ) {
                 this.remainingSeconds = seconds;
             }
 
@@ -1522,9 +1526,14 @@ namespace ContentGuard {
                 return counter;
             }
 
+            private closePage(): void {
+                window.close();
+            }
+
             private startCountdown(timer: HTMLElement): void {
                 this.timerInterval = window.setInterval(() => {
-                    if (this.remainingSeconds === 0) return;
+                    if (this.remainingSeconds <= 0) return;
+                    if (this.remainingSeconds === this.closeAtSecond) this.closePage();
                     this.remainingSeconds--;
                     timer.textContent = `剩余等待时间: ${this.remainingSeconds} 秒`;
 
@@ -1776,12 +1785,16 @@ namespace ContentGuard {
                             }
                         })
                         .filter((n) => !isNaN(n))
-                        .sort();
-                    const correctAnswers = this.currentQuestion.answer;
+                        .sort((a, b) => a - b);
+                    const correctAnswers = this.currentQuestion.answer.sort((a, b) => a - b);
 
                     isCorrect =
                         userAnswers.length === correctAnswers.length &&
                         userAnswers.every((val, idx) => Math.abs(val - correctAnswers[idx]) < 1e-6);
+
+                    console.log(
+                        `用户答案: ${userAnswers}, 正确答案: ${correctAnswers}, isCorrect: ${isCorrect}`
+                    );
                 } else {
                     // 处理单个答案的情况
                     const numericAnswer = Number(userAnswer);
@@ -2453,7 +2466,7 @@ namespace ContentGuard {
                         case Rating.L4_WARNING:
                             return new Blocker.CooldownBlocker(90, 3);
                         case Rating.L5_EXPLICIT:
-                            return new Blocker.CooldownBlocker(180, 5);
+                            return new Blocker.CooldownBlocker(180, 5, 150);
                         default:
                             throw new Error(`Invalid rating: ${rating}`);
                     }

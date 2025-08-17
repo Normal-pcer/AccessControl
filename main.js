@@ -1232,6 +1232,7 @@ var ContentGuard;
         class CooldownBlocker {
             seconds;
             challengeRequired;
+            closeAtSecond;
             static OVERLAY_ID = "content-guard-cooldown-challenge-overlay";
             static TIMER_ID = "content-guard-cooldown-timer";
             static CHALLENGE_COUNTER_ID = "content-guard-challenge-counter";
@@ -1244,9 +1245,11 @@ var ContentGuard;
             currentQuestion = null;
             timerInterval = null;
             attempts = 0;
-            constructor(seconds, challengeRequired) {
+            constructor(seconds, challengeRequired, closeAtSecond = -1 // 将在倒计时达到指定时间时直接关闭网页
+            ) {
                 this.seconds = seconds;
                 this.challengeRequired = challengeRequired;
+                this.closeAtSecond = closeAtSecond;
                 this.remainingSeconds = seconds;
             }
             execute() {
@@ -1365,10 +1368,15 @@ var ContentGuard;
                 counter.style.margin = "15px 0";
                 return counter;
             }
+            closePage() {
+                window.close();
+            }
             startCountdown(timer) {
                 this.timerInterval = window.setInterval(() => {
-                    if (this.remainingSeconds === 0)
+                    if (this.remainingSeconds <= 0)
                         return;
+                    if (this.remainingSeconds === this.closeAtSecond)
+                        this.closePage();
                     this.remainingSeconds--;
                     timer.textContent = `剩余等待时间: ${this.remainingSeconds} 秒`;
                     // 最后 5 秒颜色变化
@@ -2180,7 +2188,7 @@ var ContentGuard;
                         case Rating.L4_WARNING:
                             return new Blocker.CooldownBlocker(90, 3);
                         case Rating.L5_EXPLICIT:
-                            return new Blocker.CooldownBlocker(180, 5);
+                            return new Blocker.CooldownBlocker(180, 5, 150);
                         default:
                             throw new Error(`Invalid rating: ${rating}`);
                     }
